@@ -96,13 +96,37 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
         const qtyNum = parseFloat(parsedVal);
         ing.cost = !isNaN(qtyNum) ? qtyNum * ing.pricePerUnit : 0;
       }
+    } else if (field === 'unit') {
+      const newUnit = value as string;
+      const oldUnit = ing.unit;
+      const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+
+      if (!isNaN(qtyNum) && oldUnit !== newUnit) {
+        // Option A: Convert quantity to keep cost same
+        const convertedQty = convertQuantity(qtyNum, oldUnit, newUnit);
+        ing.quantity = convertedQty.toString().replace('.', ',');
+
+        // Option B: Find product and use ITS unit for price if it matches
+        // But for now, let's just make sure cost is consistent with the NEW quantity and OLD price
+        // Actually, if we change the unit, the pricePerUnit is usually tied to a specific unit.
+        const product = productDatabase.find(p => p.name.toUpperCase() === ing.name.toUpperCase());
+        if (product && product.unit === newUnit) {
+          ing.pricePerUnit = product.pricePerUnit;
+        }
+
+        const finalQty = parseFloat(ing.quantity.replace(',', '.'));
+        ing.cost = !isNaN(finalQty) && ing.pricePerUnit ? finalQty * ing.pricePerUnit : 0;
+      }
+      ing.unit = newUnit;
     } else if (field === 'allergens') {
       ing.allergens = value as Allergen[];
     } else if (field === 'pricePerUnit' || field === 'cost') {
-      // Numeric fields
-      (ing as any)[field] = Number(value); // Safe cast or explicit set
+      (ing as any)[field] = Number(value);
+      if (field === 'pricePerUnit') {
+        const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+        ing.cost = !isNaN(qtyNum) ? qtyNum * Number(value) : 0;
+      }
     } else {
-      // String fields (name, unit, category, etc.)
       (ing as any)[field] = value;
     }
 
@@ -111,6 +135,18 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
       if (lowerVal.length > 1) {
         const matches = productDatabase.filter(p => p.name.toLowerCase().includes(lowerVal)).slice(0, 5);
         setSuggestions({ idx: ingIdx, list: matches });
+
+        // If it's an exact match (case insensitive), we could sync it immediately or wait for selection
+        // Let's at least ensure price/unit/allergens are synced if someone types it exactly
+        const exactMatch = productDatabase.find(p => p.name.toUpperCase() === (value as string).toUpperCase());
+        if (exactMatch) {
+          ing.pricePerUnit = exactMatch.pricePerUnit;
+          ing.unit = exactMatch.unit;
+          ing.allergens = exactMatch.allergens;
+          ing.category = exactMatch.category;
+          const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+          ing.cost = !isNaN(qtyNum) ? qtyNum * exactMatch.pricePerUnit : 0;
+        }
       } else setSuggestions(null);
     }
     setSubRecipes(newSubs);
@@ -192,19 +228,22 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
     newSubs.forEach(sub => {
       sub.ingredients.forEach(ing => {
         if (ing.name.toUpperCase() === quickAddProduct.name.toUpperCase()) {
-          // Detect conversion needs
           const currentQty = parseFloat(ing.quantity.replace(',', '.'));
-          if (!isNaN(currentQty)) {
-            const convertedQty = convertQuantity(currentQty, ing.unit, quickAddProduct.unit);
-            ing.quantity = convertedQty.toString().replace('.', ',');
-          }
 
+          // Sync unit and price
           ing.unit = quickAddProduct.unit;
           ing.pricePerUnit = quickAddProduct.pricePerUnit;
           ing.allergens = quickAddProduct.allergens;
+          ing.category = quickAddProduct.category;
 
-          const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
-          ing.cost = !isNaN(qtyNum) ? qtyNum * quickAddProduct.pricePerUnit : 0;
+          if (!isNaN(currentQty)) {
+            // Recalculate cost with the NEW price and OLD quantity
+            // NOTE: We don't convert quantity here because the user just defined 
+            // the product's master unit. The existing quantity in the recipe 
+            // should be interpreted in that new unit, or converted if we knew the old one.
+            // Since it's a "Quick Add", the old unit was likely default 'kg'.
+            ing.cost = currentQty * quickAddProduct.pricePerUnit;
+          }
         }
       });
     });
