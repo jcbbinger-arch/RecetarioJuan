@@ -102,20 +102,16 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
       const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
 
       if (!isNaN(qtyNum) && oldUnit !== newUnit) {
-        // Option A: Convert quantity to keep cost same
-        const convertedQty = convertQuantity(qtyNum, oldUnit, newUnit);
-        ing.quantity = convertedQty.toString().replace('.', ',');
-
-        // Option B: Find product and use ITS unit for price if it matches
-        // But for now, let's just make sure cost is consistent with the NEW quantity and OLD price
-        // Actually, if we change the unit, the pricePerUnit is usually tied to a specific unit.
+        // User requirement: Do NOT modify quantity.
+        // Adjust pricePerUnit relative to the NEW unit.
         const product = productDatabase.find(p => p.name.toUpperCase() === ing.name.toUpperCase());
-        if (product && product.unit === newUnit) {
-          ing.pricePerUnit = product.pricePerUnit;
+        if (product) {
+          const factor = convertQuantity(1, newUnit, product.unit);
+          ing.pricePerUnit = product.pricePerUnit * factor;
         }
 
-        const finalQty = parseFloat(ing.quantity.replace(',', '.'));
-        ing.cost = !isNaN(finalQty) && ing.pricePerUnit ? finalQty * ing.pricePerUnit : 0;
+        const currentPrice = ing.pricePerUnit || 0;
+        ing.cost = qtyNum * currentPrice;
       }
       ing.unit = newUnit;
     } else if (field === 'allergens') {
@@ -140,12 +136,17 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
         // Let's at least ensure price/unit/allergens are synced if someone types it exactly
         const exactMatch = productDatabase.find(p => p.name.toUpperCase() === (value as string).toUpperCase());
         if (exactMatch) {
-          ing.pricePerUnit = exactMatch.pricePerUnit;
-          ing.unit = exactMatch.unit;
+          // Keep existing unit if it's set and valid, otherwise take from product
+          const currentUnit = ing.unit || exactMatch.unit;
+          ing.unit = currentUnit;
           ing.allergens = exactMatch.allergens;
           ing.category = exactMatch.category;
+
+          const factor = convertQuantity(1, currentUnit, exactMatch.unit);
+          ing.pricePerUnit = exactMatch.pricePerUnit * factor;
+
           const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
-          ing.cost = !isNaN(qtyNum) ? qtyNum * exactMatch.pricePerUnit : 0;
+          ing.cost = !isNaN(qtyNum) ? qtyNum * ing.pricePerUnit : 0;
         }
       } else setSuggestions(null);
     }
@@ -254,15 +255,22 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
 
   const selectProduct = (subIdx: number, ingIdx: number, product: Product) => {
     const newSubs = [...subRecipes];
-    const qtyNum = parseFloat(newSubs[subIdx].ingredients[ingIdx].quantity.replace(',', '.'));
+    const ing = newSubs[subIdx].ingredients[ingIdx];
+    const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+
+    // Keep existing unit if set, otherwise take from product
+    const currentUnit = ing.unit || product.unit;
+    const factor = convertQuantity(1, currentUnit, product.unit);
+    const priceInRecipeUnit = product.pricePerUnit * factor;
+
     newSubs[subIdx].ingredients[ingIdx] = {
-      ...newSubs[subIdx].ingredients[ingIdx],
+      ...ing,
       name: product.name,
       category: product.category,
       allergens: product.allergens,
-      unit: product.unit,
-      pricePerUnit: product.pricePerUnit,
-      cost: !isNaN(qtyNum) ? qtyNum * product.pricePerUnit : 0
+      unit: currentUnit,
+      pricePerUnit: priceInRecipeUnit,
+      cost: !isNaN(qtyNum) ? qtyNum * priceInRecipeUnit : 0
     };
     setSubRecipes(newSubs);
     setSuggestions(null);
