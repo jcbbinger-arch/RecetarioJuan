@@ -610,9 +610,9 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
                                  <h3 className="text-3xl font-serif font-black uppercase text-slate-900 leading-tight mb-2 tracking-tighter">{recipe.name}</h3>
                                  <div className="flex gap-4">
                                     <span className="bg-white px-3 py-1 rounded-full text-[9px] font-black text-slate-500 border border-slate-100 uppercase tracking-widest">
-                                       {Array.isArray(recipe.category) ? recipe.category[0] : recipe.category}
+                                       {Array.isArray(recipe.category) ? recipe.category[0] : (recipe.category || 'VARIOS')}
                                     </span>
-                                    <span className="flex items-center gap-1.5 text-[9px] font-black text-amber-600 uppercase tracking-widest"><Thermometer size={12} /> {recipe.serviceDetails.servingTemp || 'N/A'}</span>
+                                    <span className="flex items-center gap-1.5 text-[9px] font-black text-amber-600 uppercase tracking-widest"><Thermometer size={12} /> {(recipe.serviceDetails?.servingTemp) || 'N/A'}</span>
                                  </div>
                               </div>
 
@@ -621,13 +621,13 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
                                     <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                        <Info size={14} className="text-indigo-500" /> Protocolo
                                     </h4>
-                                    <p className="text-xs font-black text-slate-700 uppercase">{recipe.serviceDetails.serviceType}</p>
+                                    <p className="text-xs font-black text-slate-700 uppercase">{(recipe.serviceDetails?.serviceType) || 'AMERICANA'}</p>
                                  </div>
                                  <div className="space-y-2">
                                     <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                        <Utensils size={14} className="text-amber-500" /> Marcaje
                                     </h4>
-                                    <p className="text-xs font-bold text-slate-600 leading-tight">{recipe.serviceDetails.cutlery || 'Cubertería estándar'}</p>
+                                    <p className="text-xs font-bold text-slate-600 leading-tight">{(recipe.serviceDetails?.cutlery) || 'Cubertería estándar'}</p>
                                  </div>
                               </div>
 
@@ -636,7 +636,7 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
                                     <FileText size={14} /> Explicación Sugerente (SALA)
                                  </h4>
                                  <p className="text-sm font-serif italic text-slate-700 leading-relaxed bg-white p-4 rounded-xl border border-indigo-50 shadow-inner">
-                                    "{recipe.serviceDetails.clientDescription || 'No se ha definido una descripción sugerente para este plato.'}"
+                                    "{(recipe.serviceDetails?.clientDescription) || 'No se ha definido una descripción sugerente para este plato.'}"
                                  </p>
                               </div>
 
@@ -664,3 +664,4 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
 
    return null;
 };
+
