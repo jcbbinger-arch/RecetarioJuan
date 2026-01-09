@@ -1,667 +1,703 @@
 
-import React, { useState, useMemo } from 'react';
-import { Recipe, AppSettings, ALLERGEN_LIST, Allergen, Product, MenuPlan } from '../types';
-import { Plus, Trash2, ArrowLeft, Printer, Search, ArrowUp, ArrowDown, Calendar, FileText, Utensils, AlertOctagon, Users, ShoppingCart, BookOpen, ChevronRight, ChefHat, Info, Thermometer, User, DollarSign, Save, History, Clock, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Recipe, Ingredient, ServiceDetails, SubRecipe,
+  Allergen, Product,
+  SERVICE_TYPES, AppSettings, ALLERGEN_LIST,
+  CUTLERY_DICTIONARY, TEMPERATURE_DICTIONARY, ALLERGEN_ICONS
+} from '../types';
+import {
+  Save, X, Plus, Trash2, Image as ImageIcon,
+  Book, Utensils, Thermometer, Info, Database, MessageSquare, ChevronDown, CheckCircle2,
+  ChefHat, Users, Camera, DatabaseZap, Check, HelpCircle
+} from 'lucide-react';
 
-const ALLERGEN_CONFIG: Record<Allergen, { color: string, short: string, icon: string }> = {
-   'Gluten': { color: 'bg-yellow-100 text-yellow-800', short: 'GLU', icon: '🌾' },
-   'Crustáceos': { color: 'bg-red-100 text-red-800', short: 'CRU', icon: '🦀' },
-   'Huevos': { color: 'bg-orange-100 text-orange-800', short: 'HUE', icon: '🥚' },
-   'Pescado': { color: 'bg-blue-100 text-blue-800', short: 'PES', icon: '🐟' },
-   'Cacahuetes': { color: 'bg-amber-100 text-amber-800', short: 'CAC', icon: '🥜' },
-   'Soja': { color: 'bg-purple-100 text-purple-800', short: 'SOJA', icon: '🌱' },
-   'Lácteos': { color: 'bg-sky-100 text-sky-800', short: 'LAC', icon: '🥛' },
-   'Frutos de cáscara': { color: 'bg-emerald-100 text-emerald-800', short: 'FRA', icon: '🌰' },
-   'Apio': { color: 'bg-green-100 text-green-800', short: 'API', icon: '🥬' },
-   'Mostaza': { color: 'bg-yellow-200 text-yellow-900', short: 'MUS', icon: '🌭' },
-   'Sésamo': { color: 'bg-stone-100 text-stone-800', short: 'SES', icon: '🥯' },
-   'Sulfitos': { color: 'bg-gray-200 text-gray-800', short: 'SUL', icon: '🍷' },
-   'Altramuces': { color: 'bg-pink-100 text-pink-800', short: 'ALT', icon: '🏵️' },
-   'Moluscos': { color: 'bg-indigo-100 text-indigo-800', short: 'MOL', icon: '🐙' }
-};
-
-interface MenuPlannerProps {
-   recipes: Recipe[];
-   settings: AppSettings;
-   onBack: () => void;
-   productDatabase: Product[];
-   savedMenus: MenuPlan[];
-   onSaveMenu: (menu: MenuPlan) => void;
-   onDeleteMenu: (id: string) => void;
+interface RecipeEditorProps {
+  initialRecipe?: Recipe | null;
+  productDatabase: Product[];
+  settings: AppSettings;
+  onSave: (recipe: Recipe) => void;
+  onCancel: () => void;
+  onAddProduct: (product: Product) => void;
 }
 
-export const MenuPlanner: React.FC<MenuPlannerProps> = ({
-   recipes, settings, onBack, productDatabase, savedMenus, onSaveMenu, onDeleteMenu
-}) => {
-   const [activeTab, setActiveTab] = useState<'planning' | 'service_order' | 'allergen_matrix' | 'purchase_order' | 'kitchen_fichas' | 'history'>('planning');
-   const [currentMenuId, setCurrentMenuId] = useState<string | null>(null);
-   const [menuTitle, setMenuTitle] = useState('MENÚ DEL DÍA');
-   const [eventDate, setEventDate] = useState(new Date().toISOString().split('T')[0]);
-   const [menuPax, setMenuPax] = useState<number>(30);
-   const [selectedRecipes, setSelectedRecipes] = useState<Recipe[]>([]);
-   const [searchTerm, setSearchTerm] = useState('');
-   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-
-   const filteredRecipes = recipes.filter(r =>
-      !selectedRecipes.find(sr => sr.id === r.id) &&
-      (r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         (Array.isArray(r.category) ? r.category.some(c => c.toLowerCase().includes(searchTerm.toLowerCase())) : (r.category as string).toLowerCase().includes(searchTerm.toLowerCase())))
-   );
-
-   const menuEconomics = useMemo(() => {
-      let totalCost = 0;
-      selectedRecipes.forEach(recipe => {
-         const costPerPortion = (recipe.totalCost || 0) / (recipe.yieldQuantity || 1);
-         totalCost += costPerPortion * menuPax;
-      });
-      return {
-         total: totalCost,
-         perPax: selectedRecipes.length > 0 ? totalCost / menuPax : 0
-      };
-   }, [selectedRecipes, menuPax]);
-
-   const purchaseOrderData = useMemo(() => {
-      const families: Record<string, Record<string, { name: string, quantity: number, unit: string, cost: number }>> = {};
-      selectedRecipes.forEach(recipe => {
-         const ratio = menuPax / recipe.yieldQuantity;
-         recipe.subRecipes.forEach(sub => {
-            sub.ingredients.forEach(ing => {
-               const product = productDatabase.find(p => p.name === ing.name);
-               const family = product?.category || 'OTROS';
-               const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
-               const finalQty = isNaN(qtyNum) ? 0 : qtyNum * ratio;
-               const finalCost = (ing.pricePerUnit || 0) * finalQty;
-               if (!families[family]) families[family] = {};
-               if (!families[family][ing.name]) {
-                  families[family][ing.name] = { name: ing.name, quantity: finalQty, unit: ing.unit, cost: finalCost };
-               } else {
-                  families[family][ing.name].quantity += finalQty;
-                  families[family][ing.name].cost += finalCost;
-               }
-            });
-         });
-      });
-      return Object.entries(families).sort(([a], [b]) => a.localeCompare(b));
-   }, [selectedRecipes, menuPax, productDatabase]);
-
-   const handleSavePlan = (asNew: boolean = false) => {
-      if (selectedRecipes.length === 0) return;
-      setSaveStatus('saving');
-      const newId = (asNew || !currentMenuId) ? `menu_${Date.now()}` : currentMenuId;
-      const plan: MenuPlan = {
-         id: newId,
-         title: menuTitle,
-         date: eventDate,
-         pax: menuPax,
-         recipeIds: selectedRecipes.map(r => r.id),
-         lastModified: Date.now()
-      };
-      onSaveMenu(plan);
-      if (asNew || !currentMenuId) setCurrentMenuId(newId);
-
-      setTimeout(() => {
-         setSaveStatus('saved');
-         setTimeout(() => setSaveStatus('idle'), 2000);
-      }, 600);
-   };
-
-   const handleLoadPlan = (plan: MenuPlan) => {
-      setMenuTitle(plan.title);
-      setEventDate(plan.date);
-      setMenuPax(plan.pax);
-      setCurrentMenuId(plan.id);
-
-      const matchedRecipes = plan.recipeIds
-         .map(id => recipes.find(r => r.id === id))
-         .filter(r => !!r) as Recipe[];
-
-      setSelectedRecipes(matchedRecipes);
-      setActiveTab('planning');
-   };
-
-   const handleReset = () => {
-      if (confirm("¿Limpiar planificación actual?")) {
-         setSelectedRecipes([]);
-         setMenuTitle('MENÚ DEL DÍA');
-         setCurrentMenuId(null);
-         setMenuPax(30);
-      }
-   };
-
-   const addToMenu = (recipe: Recipe) => setSelectedRecipes([...selectedRecipes, recipe]);
-   const removeFromMenu = (index: number) => {
-      const newMenu = [...selectedRecipes];
-      newMenu.splice(index, 1);
-      setSelectedRecipes(newMenu);
-   };
-
-   const moveItem = (index: number, direction: 'up' | 'down') => {
-      const newMenu = [...selectedRecipes];
-      const item = newMenu[index];
-      newMenu.splice(index, 1);
-      newMenu.splice(direction === 'up' ? index - 1 : index + 1, 0, item);
-      setSelectedRecipes(newMenu);
-   };
-
-   const getRecipeAllergens = (r: Recipe): Allergen[] => {
-      const set = new Set<Allergen>();
-      r.subRecipes.forEach(sub => sub.ingredients.forEach(ing => ing.allergens.forEach(a => set.add(a))));
-      return Array.from(set);
-   };
-
-   const scaleQuantity = (qtyStr: string, recipeYield: number): string => {
-      const num = parseFloat(qtyStr.replace(',', '.'));
-      if (isNaN(num)) return qtyStr;
-      const scaled = num * (menuPax / recipeYield);
-      return scaled % 1 === 0 ? scaled.toString() : scaled.toFixed(3);
-   };
-
-   const PrintHeader = ({ title, subtitle }: { title: string, subtitle: string }) => (
-      <div className="flex justify-between items-center border-b-2 border-black pb-4 mb-6">
-         <div className="w-1/4">
-            {settings.instituteLogo ? <img src={settings.instituteLogo} className="h-16 object-contain" alt="IES" /> : <span className="font-bold">{settings.instituteName}</span>}
-         </div>
-         <div className="w-2/4 text-center">
-            <h1 className="text-2xl font-black uppercase mb-1 tracking-tighter">{title}</h1>
-            <p className="text-[10px] font-bold uppercase tracking-widest">{subtitle}</p>
-         </div>
-         <div className="w-1/4 text-right">
-            <p className="text-xs font-black">{settings.teacherName}</p>
-            <p className="text-[10px] font-bold text-slate-500">{new Date().toLocaleDateString()}</p>
-         </div>
-      </div>
-   );
-
-   if (activeTab === 'history') {
-      return (
-         <div className="min-h-screen bg-gray-50 p-6 md:p-10">
-            <div className="max-w-4xl mx-auto">
-               <div className="flex items-center justify-between mb-10">
-                  <div className="flex items-center gap-4">
-                     <button onClick={() => setActiveTab('planning')} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-slate-600">
-                        <ArrowLeft size={24} />
-                     </button>
-                     <div>
-                        <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Histórico de Menús</h1>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Planificaciones Guardadas</p>
-                     </div>
-                  </div>
-                  <button onClick={() => setActiveTab('planning')} className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg">
-                     <Plus size={16} /> Nueva Planificación
-                  </button>
-               </div>
-
-               <div className="grid grid-cols-1 gap-4">
-                  {savedMenus.length === 0 ? (
-                     <div className="bg-white rounded-3xl p-20 text-center border border-dashed border-slate-300">
-                        <Clock size={48} className="mx-auto text-slate-200 mb-4" />
-                        <p className="font-bold uppercase tracking-widest text-[10px] text-slate-400">No hay menús guardados todavía</p>
-                     </div>
-                  ) : (
-                     savedMenus.map(plan => (
-                        <div key={plan.id} className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col md:flex-row justify-between items-center gap-6 hover:border-indigo-400 transition-all group shadow-sm">
-                           <div className="flex items-center gap-5">
-                              <div className="bg-slate-100 p-4 rounded-xl text-slate-400 group-hover:text-indigo-600 transition-colors">
-                                 <Calendar size={28} />
-                              </div>
-                              <div>
-                                 <h3 className="font-black text-slate-800 uppercase text-lg leading-none mb-2">{plan.title}</h3>
-                                 <div className="flex items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                    <span className="flex items-center gap-1"><Clock size={12} /> {plan.date}</span>
-                                    <span className="flex items-center gap-1"><Users size={12} /> {plan.pax} PAX</span>
-                                    <span className="bg-slate-50 px-2 py-0.5 rounded">{plan.recipeIds.length} PLATOS</span>
-                                 </div>
-                              </div>
-                           </div>
-                           <div className="flex gap-2">
-                              <button onClick={() => handleLoadPlan(plan)} className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest">
-                                 Cargar Menú
-                              </button>
-                              <button onClick={() => confirm(`¿Borrar el menú ${plan.title}?`) && onDeleteMenu(plan.id)} className="p-3 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
-                                 <Trash2 size={20} />
-                              </button>
-                           </div>
-                        </div>
-                     ))
-                  )}
-               </div>
-            </div>
-         </div>
-      );
-   }
-
-   if (activeTab === 'planning') {
-      return (
-         <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-7xl mx-auto">
-               <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-                  <div className="flex items-center gap-4">
-                     <button onClick={onBack} className="p-2 hover:bg-gray-200 rounded-full transition-colors"><ArrowLeft size={24} className="text-slate-600" /></button>
-                     <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Planificador de Menús</h1>
-                  </div>
-                  <div className="flex gap-2 flex-wrap justify-center">
-                     <button onClick={() => setActiveTab('history')} className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-bold text-xs uppercase tracking-widest transition-all shadow-sm"><History size={16} /> Histórico</button>
-                     <button onClick={() => setActiveTab('kitchen_fichas')} disabled={selectedRecipes.length === 0} className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-slate-900 rounded-xl hover:bg-amber-600 disabled:opacity-50 font-bold text-xs uppercase tracking-widest transition-all shadow-md"><BookOpen size={16} /> Fichas Cocina</button>
-                     <button onClick={() => setActiveTab('purchase_order')} disabled={selectedRecipes.length === 0} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 font-bold text-xs uppercase tracking-widest transition-all shadow-md"><ShoppingCart size={16} /> Pedido Familias</button>
-                     <button onClick={() => setActiveTab('service_order')} disabled={selectedRecipes.length === 0} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-700 disabled:opacity-50 font-bold text-xs uppercase tracking-widest transition-all shadow-md"><FileText size={16} /> Orden Servicio</button>
-                     <button onClick={() => setActiveTab('allergen_matrix')} disabled={selectedRecipes.length === 0} className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 text-white rounded-xl hover:bg-rose-700 disabled:opacity-50 font-bold text-xs uppercase tracking-widest transition-all shadow-md"><AlertOctagon size={16} /> Matriz Alérgenos</button>
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  <div className="lg:col-span-5 bg-white rounded-3xl shadow-sm border border-gray-200 flex flex-col overflow-hidden h-[75vh]">
-                     <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-                        <div className="relative">
-                           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                           <input type="text" placeholder="Filtrar catálogo..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-slate-900 shadow-inner font-bold text-sm" />
-                        </div>
-                     </div>
-                     <div className="flex-grow overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                        {filteredRecipes.map(recipe => (
-                           <div key={recipe.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-transparent hover:border-indigo-100 hover:bg-indigo-50/30 transition-all group">
-                              <div className="flex items-center gap-4">
-                                 <div className="w-14 h-14 bg-gray-100 rounded-xl overflow-hidden shadow-inner">{recipe.photo && <img src={recipe.photo} className="w-full h-full object-cover" alt="" />}</div>
-                                 <div>
-                                    <h4 className="font-black text-slate-800 text-sm uppercase leading-none mb-1">{recipe.name}</h4>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                                       {Array.isArray(recipe.category) ? recipe.category.join(' | ') : recipe.category}
-                                    </p>
-                                 </div>
-                              </div>
-                              <button onClick={() => addToMenu(recipe)} className="p-3 bg-white text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><Plus size={20} /></button>
-                           </div>
-                        ))}
-                     </div>
-                  </div>
-
-                  <div className="lg:col-span-7 bg-white rounded-3xl shadow-xl border border-gray-100 flex flex-col overflow-hidden h-[75vh]">
-                     <div className="p-8 border-b border-indigo-50 bg-indigo-50/30">
-                        <div className="flex items-center justify-between mb-6">
-                           <div className="flex items-center gap-4">
-                              <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-lg"><Utensils size={24} /></div>
-                              <div>
-                                 <h3 className="font-black text-indigo-900 uppercase tracking-widest">Servicio Programado</h3>
-                                 <p className="text-xs text-indigo-400 font-bold uppercase">Gestión de volúmenes y costes</p>
-                              </div>
-                           </div>
-                           {selectedRecipes.length > 0 && (
-                              <div className="flex gap-2">
-                                 <button
-                                    onClick={() => handleSavePlan()}
-                                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${saveStatus === 'saved' ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
-                                 >
-                                    {saveStatus === 'saving' ? 'Guardando...' : saveStatus === 'saved' ? <><CheckCircle2 size={14} /> Guardado</> : <><Save size={14} /> Guardar</>}
-                                 </button>
-                                 <button onClick={handleReset} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all" title="Resetear"><Trash2 size={20} /></button>
-                              </div>
-                           )}
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                           <div className="md:col-span-2">
-                              <label className="block text-[10px] font-black text-indigo-700 uppercase mb-2 tracking-widest">Nombre del Menú / Evento</label>
-                              <input type="text" value={menuTitle} onChange={e => setMenuTitle(e.target.value)} className="w-full px-5 py-3 border border-indigo-100 rounded-2xl text-sm font-black shadow-sm outline-none focus:ring-2 focus:ring-indigo-600" />
-                           </div>
-                           <div>
-                              <label className="block text-[10px] font-black text-indigo-700 uppercase mb-2 tracking-widest">Raciones (Pax)</label>
-                              <div className="relative">
-                                 <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-300" size={18} />
-                                 <input type="number" value={menuPax} onChange={e => setMenuPax(Math.max(1, Number(e.target.value)))} className="w-full pl-12 pr-4 py-3 border border-indigo-100 rounded-2xl text-sm font-black shadow-sm outline-none focus:ring-2 focus:ring-indigo-600" />
-                              </div>
-                           </div>
-                        </div>
-                     </div>
-
-                     <div className="flex-grow overflow-y-auto p-6 space-y-4 bg-slate-50/30 custom-scrollbar">
-                        {selectedRecipes.length === 0 ? (
-                           <div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-3xl">
-                              <Calendar size={64} className="mb-4 opacity-10" />
-                              <p className="font-bold uppercase tracking-widest text-[10px]">Añade platos para planificar el servicio</p>
-                           </div>
-                        ) : (
-                           <>
-                              {selectedRecipes.map((recipe, idx) => (
-                                 <div key={`${recipe.id}_${idx}`} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 animate-fadeIn group">
-                                    <span className="font-black text-slate-200 text-xl w-8 text-center">{idx + 1}</span>
-                                    <div className="w-14 h-14 bg-slate-50 rounded-xl overflow-hidden border border-slate-100">{recipe.photo && <img src={recipe.photo} className="w-full h-full object-cover" alt="" />}</div>
-                                    <div className="flex-grow">
-                                       <h4 className="font-black text-slate-800 text-sm uppercase tracking-tight truncate">{recipe.name}</h4>
-                                       <p className="text-[10px] text-slate-400 font-bold italic">Escalado: {menuPax} raciones</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                       <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => moveItem(idx, 'up')} className="p-1 text-slate-300 hover:text-slate-900" disabled={idx === 0}><ArrowUp size={16} /></button>
-                                          <button onClick={() => moveItem(idx, 'down')} className="p-1 text-slate-300 hover:text-slate-900" disabled={idx === selectedRecipes.length - 1}><ArrowDown size={16} /></button>
-                                       </div>
-                                       <button onClick={() => removeFromMenu(idx)} className="p-3 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all"><Trash2 size={20} /></button>
-                                    </div>
-                                 </div>
-                              ))}
-                              <div className="p-8 border-t border-slate-100 mt-6 bg-slate-50/50 rounded-2xl text-right">
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Coste Total Estimado</p>
-                                 <p className="text-3xl font-black text-indigo-600">{menuEconomics.total.toFixed(2)}€</p>
-                              </div>
-                           </>
-                        )}
-                     </div>
-                  </div>
-               </div>
-            </div>
-         </div>
-      );
-   }
-
-   if (activeTab === 'kitchen_fichas') {
-      return (
-         <div className="min-h-screen bg-gray-100 print:bg-white p-4 md:p-10">
-            <div className="max-w-5xl mx-auto mb-6 flex justify-between items-center no-print">
-               <button onClick={() => setActiveTab('planning')} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-bold uppercase text-[10px] tracking-widest">
-                  <ArrowLeft size={20} />
-                  <span>Volver</span>
-               </button>
-               <button onClick={() => window.print()} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2.5 rounded-xl hover:bg-slate-700 transition-all shadow-lg font-black uppercase text-xs tracking-widest">
-                  <Printer size={20} />
-                  <span>Imprimir Fichas Escaladas</span>
-               </button>
-            </div>
-
-            {selectedRecipes.map((recipe, rIdx) => (
-               <div key={recipe.id} className="bg-white shadow-2xl print:shadow-none mb-10 overflow-hidden rounded-3xl print:rounded-none page-break border border-slate-200 print:border-none max-w-[210mm] mx-auto">
-                  <div className="bg-slate-900 text-white p-10">
-                     <div className="flex justify-between items-start">
-                        <div>
-                           <p className="text-amber-400 font-black uppercase tracking-[0.2em] text-[10px] mb-3">
-                              {Array.isArray(recipe.category) ? recipe.category.join(' | ') : recipe.category}
-                           </p>
-                           <h2 className="text-4xl font-serif font-black uppercase leading-none tracking-tighter">{recipe.name}</h2>
-                           <p className="text-slate-400 text-xs mt-4 uppercase font-black tracking-widest">VOLUMEN DE PASE: {menuPax} {recipe.yieldUnit}</p>
-                        </div>
-                        <div className="text-right flex flex-col items-end">
-                           <div className="bg-white/10 p-2 rounded-xl mb-3 border border-white/5"><Utensils size={32} className="text-white" /></div>
-                           <p className="text-3xl font-black text-amber-500">{menuPax} PAX</p>
-                        </div>
-                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 border-b border-slate-100 divide-x divide-slate-100">
-                     <div className="p-6 flex items-center gap-4">
-                        <Info size={20} className="text-indigo-400" />
-                        <div>
-                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Servicio Sala</p>
-                           <p className="text-xs font-black uppercase text-slate-800">{recipe.serviceDetails.serviceType}</p>
-                        </div>
-                     </div>
-                     <div className="p-6 flex items-center gap-4">
-                        <Thermometer size={20} className="text-rose-400" />
-                        <div>
-                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Temp. Pase</p>
-                           <p className="text-xs font-black uppercase text-slate-800">{recipe.serviceDetails.servingTemp || 'N/A'}</p>
-                        </div>
-                     </div>
-                     <div className="p-6 flex items-center gap-4">
-                        <User size={20} className="text-amber-400" />
-                        <div>
-                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Responsable</p>
-                           <p className="text-xs font-black uppercase text-slate-800">{recipe.creator || settings.teacherName}</p>
-                        </div>
-                     </div>
-                  </div>
-
-                  <div className="p-10 space-y-12">
-                     {recipe.subRecipes.map((sub, sIdx) => (
-                        <div key={sIdx} className="bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100 break-inside-avoid shadow-inner">
-                           <div className="flex flex-col md:flex-row gap-10">
-                              <div className="md:w-5/12">
-                                 <h4 className="font-black text-slate-900 uppercase border-b-2 border-slate-900 pb-3 mb-6 text-sm flex items-center gap-3">
-                                    <span className="bg-slate-900 text-white w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black">{sIdx + 1}</span>
-                                    {sub.name}
-                                 </h4>
-                                 <table className="w-full text-xs">
-                                    <thead className="text-slate-400 uppercase font-black border-b border-slate-200">
-                                       <tr>
-                                          <th className="py-2 text-left tracking-widest">Género</th>
-                                          <th className="py-2 text-right tracking-widest">Peso/Vol</th>
-                                          <th className="py-2 pl-2 tracking-widest">Ud.</th>
-                                       </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                       {sub.ingredients.map((ing, iIdx) => (
-                                          <tr key={iIdx}>
-                                             <td className="py-2.5 font-bold text-slate-800 uppercase text-[11px] leading-tight">{ing.name}</td>
-                                             <td className="py-2.5 text-right font-mono font-black text-indigo-600 text-[11px]">{scaleQuantity(ing.quantity, recipe.yieldQuantity)}</td>
-                                             <td className="py-2.5 pl-2 text-slate-400 uppercase font-black text-[9px]">{ing.unit}</td>
-                                          </tr>
-                                       ))}
-                                    </tbody>
-                                 </table>
-                              </div>
-                              <div className="md:w-7/12 border-l border-slate-200 md:pl-10">
-                                 <h5 className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-[0.2em] flex items-center gap-2">Técnicas de Elaboración</h5>
-                                 <div className="text-xs leading-relaxed whitespace-pre-wrap text-slate-700 font-serif text-justify">{sub.instructions || "Paso técnico no definido."}</div>
-                              </div>
-                           </div>
-                        </div>
-                     ))}
-
-                     <div className="bg-slate-900 text-white p-8 rounded-2xl">
-                        <h4 className="text-[10px] font-black uppercase text-amber-400 mb-3 tracking-[0.2em] flex items-center gap-2">Puesta en Plato y Acabado</h4>
-                        <p className="text-xs text-slate-300 font-medium leading-relaxed italic">{recipe.platingInstructions || "Ver manual de emplatado estándar."}</p>
-                     </div>
-                  </div>
-               </div>
-            ))}
-         </div>
-      );
-   }
-
-   if (activeTab === 'purchase_order') {
-      return (
-         <div className="min-h-screen bg-gray-100 print:bg-white p-4 md:p-10">
-            <div className="max-w-[210mm] mx-auto bg-white shadow-2xl print:shadow-none p-12 print:p-0 rounded-3xl overflow-hidden">
-               <div className="flex justify-between items-center mb-8 print:hidden">
-                  <button onClick={() => setActiveTab('planning')} className="flex items-center gap-2 text-slate-500 font-bold hover:text-slate-900 transition-colors uppercase text-[10px] tracking-widest"><ArrowLeft size={20} /> Volver</button>
-                  <button onClick={() => window.print()} className="flex items-center gap-2 bg-emerald-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg hover:bg-emerald-700 transition-all uppercase text-xs tracking-widest"><Printer size={20} /> Generar Pedido</button>
-               </div>
-
-               <PrintHeader title="HOJA DE PEDIDO POR FAMILIAS" subtitle={`EVENTO: ${menuTitle} | VOLUMEN: ${menuPax} PAX | FECHA: ${eventDate}`} />
-
-               <div className="mb-10 flex justify-end">
-                  <div className="border-4 border-slate-900 p-6 rounded-2xl text-right bg-slate-50">
-                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Presupuesto Estimado Pedido</p>
-                     <p className="text-3xl font-black text-slate-900 tracking-tighter">{menuEconomics.total.toFixed(2)}€</p>
-                  </div>
-               </div>
-
-               <div className="space-y-12">
-                  {purchaseOrderData.map(([family, items]) => (
-                     <div key={family} className="break-inside-avoid border-t-2 border-slate-200 pt-6">
-                        <h3 className="text-lg font-black text-slate-900 uppercase tracking-[0.1em] mb-6 flex items-center gap-3">
-                           <span className="bg-slate-900 text-white px-3 py-1 rounded text-xs font-black">{family}</span>
-                           FAMILIA DE PRODUCTO
-                        </h3>
-                        <table className="w-full text-left text-xs">
-                           <thead className="border-b-2 border-slate-900">
-                              <tr className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                                 <th className="py-3">Género / Materia Prima</th>
-                                 <th className="py-3 text-right">Cantidad Solicitada</th>
-                                 <th className="py-3 pl-6">Unidad</th>
-                                 <th className="py-3 text-right">Coste Est.</th>
-                              </tr>
-                           </thead>
-                           <tbody className="divide-y divide-slate-100">
-                              {Object.values(items).map((item: any) => (
-                                 <tr key={item.name} className="hover:bg-slate-50/50">
-                                    <td className="py-3.5 font-black text-slate-800 uppercase tracking-tight">{item.name}</td>
-                                    <td className="py-3.5 text-right font-mono font-black text-emerald-600 text-sm">{item.quantity % 1 === 0 ? item.quantity : item.quantity.toFixed(3)}</td>
-                                    <td className="py-3.5 pl-6 font-black text-slate-400 uppercase text-[10px] tracking-widest">{item.unit}</td>
-                                    <td className="py-3.5 text-right font-mono text-slate-400 font-bold">{item.cost.toFixed(2)}€</td>
-                                 </tr>
-                              ))}
-                           </tbody>
-                        </table>
-                     </div>
-                  ))}
-               </div>
-
-               <div className="mt-16 pt-10 border-t border-slate-100 text-center text-[10px] text-slate-300 font-bold uppercase tracking-[0.3em] print:text-black">
-                  Este pedido es una proyección basada en escandallos técnicos para {menuPax} comensales. Verifique existencias antes de tramitar.
-               </div>
-            </div>
-         </div>
-      );
-   }
-
-   if (activeTab === 'allergen_matrix') {
-      return (
-         <div className="min-h-screen bg-gray-100 print:bg-white p-4 md:p-10">
-            <div className="max-w-[297mm] mx-auto bg-white shadow-2xl print:shadow-none p-12 print:p-0 rounded-3xl overflow-hidden">
-               <div className="flex justify-between items-center mb-8 print:hidden">
-                  <button onClick={() => setActiveTab('planning')} className="flex items-center gap-2 text-slate-500 font-bold hover:text-slate-900 uppercase text-[10px] tracking-widest"><ArrowLeft size={20} /> Volver</button>
-                  <button onClick={() => window.print()} className="flex items-center gap-2 bg-rose-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg hover:bg-rose-700 transition-all uppercase text-xs tracking-widest"><Printer size={20} /> Imprimir Matriz</button>
-               </div>
-
-               <PrintHeader title="DECLARACIÓN DE ALÉRGENOS POR SERVICIO" subtitle={`SERVICIO: ${menuTitle} | FECHA: ${eventDate} | VOLUMEN: ${menuPax} PAX`} />
-
-               <div className="overflow-x-auto border border-slate-900 rounded-lg">
-                  <table className="w-full border-collapse border-hidden text-[9px] table-fixed">
-                     <thead>
-                        <tr className="bg-slate-50">
-                           <th className="border border-slate-900 p-4 text-left uppercase font-black text-slate-900 w-1/4 text-sm tracking-tighter">Relación de Platos</th>
-                           {ALLERGEN_LIST.map(allergen => (
-                              <th key={allergen} className="border border-slate-900 p-1 text-center font-black uppercase text-[8px]">
-                                 <div className="flex flex-col items-center justify-end h-36 pb-3">
-                                    <span className="text-xl mb-3">{ALLERGEN_CONFIG[allergen].icon}</span>
-                                    <span className="[writing-mode:vertical-lr] rotate-180 transform font-black tracking-tighter text-slate-800">
-                                       {allergen.toUpperCase()}
-                                    </span>
-                                 </div>
-                              </th>
-                           ))}
-                        </tr>
-                     </thead>
-                     <tbody>
-                        {selectedRecipes.map((recipe, idx) => {
-                           const allergens = getRecipeAllergens(recipe);
-                           return (
-                              <tr key={idx} className="hover:bg-slate-50/50">
-                                 <td className="border border-slate-900 p-4 font-black uppercase text-slate-800 leading-tight text-xs tracking-tight bg-slate-50/30">{recipe.name}</td>
-                                 {ALLERGEN_LIST.map(allergen => {
-                                    const hasAllergen = allergens.includes(allergen);
-                                    return (
-                                       <td key={allergen} className={`border border-slate-900 p-1 text-center ${hasAllergen ? 'bg-rose-50' : ''}`}>
-                                          {hasAllergen && <span className="text-xl font-black text-rose-600">X</span>}
-                                       </td>
-                                    );
-                                 })}
-                              </tr>
-                           );
-                        })}
-                     </tbody>
-                  </table>
-               </div>
-               <div className="mt-10 p-6 border-2 border-slate-900 rounded-2xl bg-slate-50 text-[10px] leading-relaxed italic text-slate-600 font-medium">
-                  <strong>IMPORTANTE:</strong> Información facilitada en cumplimiento del Reglamento (UE) nº 1169/2011 sobre la información alimentaria facilitada al consumidor.
-                  Dada la naturaleza de la elaboración manual en nuestras cocinas, no se puede garantizar la ausencia total de trazas por contaminación cruzada.
-                  Por favor, informe al personal sobre cualquier alergia grave antes de consumir.
-               </div>
-            </div>
-         </div>
-      );
-   }
-
-   if (activeTab === 'service_order') {
-      return (
-         <div className="min-h-screen bg-slate-50 print:bg-white p-4 md:p-10">
-            <div className="max-w-5xl mx-auto mb-8 flex justify-between items-center no-print">
-               <button onClick={() => setActiveTab('planning')} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold uppercase text-[10px] tracking-widest transition-colors">
-                  <ArrowLeft size={20} />
-                  <span>Volver</span>
-               </button>
-               <button onClick={() => window.print()} className="flex items-center gap-2 bg-slate-900 text-white px-8 py-3 rounded-2xl hover:bg-slate-700 transition-all shadow-xl font-black uppercase text-xs tracking-widest">
-                  <Printer size={20} />
-                  <span>Imprimir Orden de Servicio</span>
-               </button>
-            </div>
-
-            <div className="max-w-[210mm] mx-auto bg-white shadow-2xl print:shadow-none p-12 print:p-0 rounded-[3rem] print:rounded-none overflow-hidden border border-slate-100 print:border-none">
-               <PrintHeader title="ORDEN DE SERVICIO Y PROTOCOLO" subtitle={`EVENTO: ${menuTitle} | PAX: ${menuPax} | FECHA: ${eventDate}`} />
-
-               <div className="space-y-10 mt-10">
-                  {selectedRecipes.map((recipe, idx) => (
-                     <div key={recipe.id} className="page-break bg-slate-50/50 rounded-[2.5rem] border border-slate-100 p-8 print:p-6 break-inside-avoid">
-                        <div className="flex flex-col md:flex-row gap-8">
-                           <div className="md:w-1/3">
-                              <div className="aspect-square rounded-2xl overflow-hidden shadow-lg border-4 border-white mb-4">
-                                 {recipe.photo ? (
-                                    <img src={recipe.photo} className="w-full h-full object-cover" alt={recipe.name} />
-                                 ) : (
-                                    <div className="w-full h-full bg-slate-200 flex items-center justify-center text-slate-400">
-                                       <ChefHat size={48} />
-                                    </div>
-                                 )}
-                              </div>
-                              <div className="bg-slate-900 text-white p-4 rounded-2xl text-center">
-                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500 mb-1">Orden de Pase</p>
-                                 <p className="text-3xl font-black">{idx + 1}</p>
-                              </div>
-                           </div>
-
-                           <div className="md:w-2/3 space-y-6">
-                              <div>
-                                 <h3 className="text-3xl font-serif font-black uppercase text-slate-900 leading-tight mb-2 tracking-tighter">{recipe.name}</h3>
-                                 <div className="flex gap-4">
-                                    <span className="bg-white px-3 py-1 rounded-full text-[9px] font-black text-slate-500 border border-slate-100 uppercase tracking-widest">
-                                       {Array.isArray(recipe.category) ? recipe.category[0] : (recipe.category || 'VARIOS')}
-                                    </span>
-                                    <span className="flex items-center gap-1.5 text-[9px] font-black text-amber-600 uppercase tracking-widest"><Thermometer size={12} /> {(recipe.serviceDetails?.servingTemp) || 'N/A'}</span>
-                                 </div>
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                 <div className="space-y-2">
-                                    <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                       <Info size={14} className="text-indigo-500" /> Protocolo
-                                    </h4>
-                                    <p className="text-xs font-black text-slate-700 uppercase">{(recipe.serviceDetails?.serviceType) || 'AMERICANA'}</p>
-                                 </div>
-                                 <div className="space-y-2">
-                                    <h4 className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                       <Utensils size={14} className="text-amber-500" /> Marcaje
-                                    </h4>
-                                    <p className="text-xs font-bold text-slate-600 leading-tight">{(recipe.serviceDetails?.cutlery) || 'Cubertería estándar'}</p>
-                                 </div>
-                              </div>
-
-                              <div className="space-y-2 pt-4 border-t border-slate-200">
-                                 <h4 className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                                    <FileText size={14} /> Explicación Sugerente (SALA)
-                                 </h4>
-                                 <p className="text-sm font-serif italic text-slate-700 leading-relaxed bg-white p-4 rounded-xl border border-indigo-50 shadow-inner">
-                                    "{(recipe.serviceDetails?.clientDescription) || 'No se ha definido una descripción sugerente para este plato.'}"
-                                 </p>
-                              </div>
-
-                              {recipe.platingInstructions && (
-                                 <div className="space-y-2 bg-slate-900 text-white p-6 rounded-2xl">
-                                    <h4 className="flex items-center gap-2 text-[10px] font-black text-amber-400 uppercase tracking-widest">
-                                       Instrucciones de Pase
-                                    </h4>
-                                    <p className="text-xs leading-relaxed opacity-90">{recipe.platingInstructions}</p>
-                                 </div>
-                              )}
-                           </div>
-                        </div>
-                     </div>
-                  ))}
-               </div>
-
-               <div className="mt-16 pt-8 border-t border-slate-200 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em]">Protocolos Académicos de Servicio | IES {settings.instituteName}</p>
-               </div>
-            </div>
-         </div>
-      );
-   }
-
-   return null;
+const emptyServiceDetails: ServiceDetails = {
+  presentation: '',
+  servingTemp: '',
+  cutlery: '',
+  passTime: '',
+  serviceType: 'Servicio a la Americana',
+  clientDescription: ''
 };
 
+export const RecipeEditor: React.FC<RecipeEditorProps> = ({
+  initialRecipe, productDatabase, settings, onSave, onCancel, onAddProduct
+}) => {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState<string[]>(
+    settings.categories && settings.categories.length > 0 ? [settings.categories[0]] : ['Otros']
+  );
+  const [yieldQuantity, setYieldQuantity] = useState<number>(1);
+  const [yieldUnit, setYieldUnit] = useState('Raciones');
+  const [photo, setPhoto] = useState('');
+  const [creator, setCreator] = useState(settings.teacherName);
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [platingInstructions, setPlatingInstructions] = useState('');
+  const [serviceDetails, setServiceDetails] = useState<ServiceDetails>(emptyServiceDetails);
+  const [subRecipes, setSubRecipes] = useState<SubRecipe[]>([]);
+  const [activeTab, setActiveTab] = useState<number>(0);
+  const [suggestions, setSuggestions] = useState<{ idx: number, list: Product[] } | null>(null);
+
+  const [quickAddProduct, setQuickAddProduct] = useState<Product | null>(null);
+  const [familySearch, setFamilySearch] = useState('');
+  const [showFamilyList, setShowFamilyList] = useState(false);
+
+  const existingFamilies = useMemo(() => {
+    const families = Array.from(new Set(
+      productDatabase.map(p => p.category?.toUpperCase() || 'VARIOS')
+    )).sort();
+    return families;
+  }, [productDatabase]);
+
+  const filteredFamilies = useMemo(() => {
+    const search = familySearch.toUpperCase();
+    return existingFamilies.filter(f => f.includes(search));
+  }, [existingFamilies, familySearch]);
+
+  useEffect(() => {
+    if (initialRecipe) {
+      setName(initialRecipe.name);
+      setCategory(Array.isArray(initialRecipe.category) ? initialRecipe.category : [initialRecipe.category]);
+      setYieldQuantity(initialRecipe.yieldQuantity);
+      setYieldUnit(initialRecipe.yieldUnit);
+      setPhoto(initialRecipe.photo);
+      setCreator(initialRecipe.creator || settings.teacherName);
+      setSourceUrl(initialRecipe.sourceUrl || '');
+      setServiceDetails(initialRecipe.serviceDetails || emptyServiceDetails);
+      setPlatingInstructions(initialRecipe.platingInstructions || '');
+      setSubRecipes((initialRecipe.subRecipes || []).map(sr => ({
+        ...sr,
+        photos: sr.photos || ((sr as any).photo ? [(sr as any).photo] : [])
+      })));
+    } else {
+      setSubRecipes([{ id: Date.now().toString(), name: 'Elaboración Principal', ingredients: [], instructions: '', photos: [] }]);
+      setCreator(settings.teacherName);
+    }
+  }, [initialRecipe, settings.teacherName]);
+
+  const updateIngredient = (subIdx: number, ingIdx: number, field: keyof Ingredient, value: string | number | Allergen[]) => {
+    const newSubs = [...subRecipes];
+    const ing = newSubs[subIdx].ingredients[ingIdx];
+
+    if (field === 'quantity') {
+      const parsedVal = value.toString().replace(',', '.');
+      ing.quantity = parsedVal;
+      if (ing.pricePerUnit !== undefined) {
+        const qtyNum = parseFloat(parsedVal);
+        ing.cost = !isNaN(qtyNum) ? qtyNum * ing.pricePerUnit : 0;
+      }
+    } else if (field === 'unit') {
+      const newUnit = value as string;
+      const oldUnit = ing.unit;
+      const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+
+      if (!isNaN(qtyNum) && oldUnit !== newUnit) {
+        // User requirement: Do NOT modify quantity.
+        // Adjust pricePerUnit relative to the NEW unit.
+        const product = productDatabase.find(p => p.name.toUpperCase() === ing.name.toUpperCase());
+        if (product) {
+          const factor = convertQuantity(1, newUnit, product.unit);
+          ing.pricePerUnit = product.pricePerUnit * factor;
+        }
+
+        const currentPrice = ing.pricePerUnit || 0;
+        ing.cost = qtyNum * currentPrice;
+      }
+      ing.unit = newUnit;
+    } else if (field === 'allergens') {
+      ing.allergens = value as Allergen[];
+    } else if (field === 'pricePerUnit' || field === 'cost') {
+      (ing as any)[field] = Number(value);
+      if (field === 'pricePerUnit') {
+        const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+        ing.cost = !isNaN(qtyNum) ? qtyNum * Number(value) : 0;
+      }
+    } else {
+      (ing as any)[field] = value;
+    }
+
+    if (field === 'name') {
+      const lowerVal = (value as string).toLowerCase();
+      if (lowerVal.length > 1) {
+        const matches = productDatabase.filter(p => p.name.toLowerCase().includes(lowerVal)).slice(0, 5);
+        setSuggestions({ idx: ingIdx, list: matches });
+
+        // If it's an exact match (case insensitive), we could sync it immediately or wait for selection
+        // Let's at least ensure price/unit/allergens are synced if someone types it exactly
+        const exactMatch = productDatabase.find(p => p.name.toUpperCase() === (value as string).toUpperCase());
+        if (exactMatch) {
+          // Keep existing unit if it's set and valid, otherwise take from product
+          const currentUnit = ing.unit || exactMatch.unit;
+          ing.unit = currentUnit;
+          ing.allergens = exactMatch.allergens;
+          ing.category = exactMatch.category;
+
+          const factor = convertQuantity(1, currentUnit, exactMatch.unit);
+          ing.pricePerUnit = exactMatch.pricePerUnit * factor;
+
+          const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+          ing.cost = !isNaN(qtyNum) ? qtyNum * ing.pricePerUnit : 0;
+        }
+      } else setSuggestions(null);
+    }
+    setSubRecipes(newSubs);
+  };
+
+  const handleOpenQuickAdd = (ingName: string) => {
+    if (!ingName.trim()) return;
+    setQuickAddProduct({
+      id: `p_quick_${Date.now()}`,
+      name: ingName.toUpperCase(),
+      unit: 'kg',
+      pricePerUnit: 0,
+      allergens: [],
+      category: 'ALMACÉN'
+    });
+    setFamilySearch('ALMACÉN');
+    setSuggestions(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === '.' || e.key === 'Decimal') {
+      e.preventDefault();
+      const input = e.currentTarget;
+      const start = input.selectionStart || 0;
+      const end = input.selectionEnd || 0;
+      const val = input.value;
+      const newVal = val.substring(0, start) + ',' + val.substring(end);
+
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      nativeInputValueSetter?.call(input, newVal);
+
+      const event = new Event('input', { bubbles: true });
+      input.dispatchEvent(event);
+      setTimeout(() => input.setSelectionRange(start + 1, start + 1), 0);
+    }
+  };
+
+  const convertQuantity = (qty: number, fromUnit: string, toUnit: string): number => {
+    const f = fromUnit.toLowerCase();
+    const t = toUnit.toLowerCase();
+    if (f === t) return qty;
+
+    // Mass
+    if (f === 'g' && t === 'kg') return qty / 1000;
+    if (f === 'kg' && t === 'g') return qty * 1000;
+
+    // Volume
+    // Normalize to ml first
+    const getMl = (v: number, u: string) => {
+      if (u === 'l' || u === 'litro') return v * 1000;
+      if (u === 'dl') return v * 100;
+      if (u === 'cl') return v * 10;
+      return v; // assume ml
+    };
+
+    // Check if both are volume
+    const volumeUnits = ['l', 'litro', 'dl', 'cl', 'ml'];
+    if (volumeUnits.includes(f) && volumeUnits.includes(t)) {
+      const ml = getMl(qty, f);
+      if (t === 'l' || t === 'litro') return ml / 1000;
+      if (t === 'dl') return ml / 100;
+      if (t === 'cl') return ml / 10;
+      return ml;
+    }
+
+    return qty;
+  };
+
+  const handleSaveQuickProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickAddProduct) return;
+
+    onAddProduct({
+      ...quickAddProduct,
+      category: familySearch.toUpperCase() || 'VARIOS'
+    });
+
+    const newSubs = [...subRecipes];
+    newSubs.forEach(sub => {
+      sub.ingredients.forEach(ing => {
+        if (ing.name.toUpperCase() === quickAddProduct.name.toUpperCase()) {
+          const currentQty = parseFloat(ing.quantity.replace(',', '.'));
+
+          // Sync unit and price
+          ing.unit = quickAddProduct.unit;
+          ing.pricePerUnit = quickAddProduct.pricePerUnit;
+          ing.allergens = quickAddProduct.allergens;
+          ing.category = quickAddProduct.category;
+
+          if (!isNaN(currentQty)) {
+            // Recalculate cost with the NEW price and OLD quantity
+            // NOTE: We don't convert quantity here because the user just defined 
+            // the product's master unit. The existing quantity in the recipe 
+            // should be interpreted in that new unit, or converted if we knew the old one.
+            // Since it's a "Quick Add", the old unit was likely default 'kg'.
+            ing.cost = currentQty * quickAddProduct.pricePerUnit;
+          }
+        }
+      });
+    });
+
+    setSubRecipes(newSubs);
+    setQuickAddProduct(null);
+  };
+
+  const selectProduct = (subIdx: number, ingIdx: number, product: Product) => {
+    const newSubs = [...subRecipes];
+    const ing = newSubs[subIdx].ingredients[ingIdx];
+    const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+
+    // Keep existing unit if set, otherwise take from product
+    const currentUnit = ing.unit || product.unit;
+    const factor = convertQuantity(1, currentUnit, product.unit);
+    const priceInRecipeUnit = product.pricePerUnit * factor;
+
+    newSubs[subIdx].ingredients[ingIdx] = {
+      ...ing,
+      name: product.name,
+      category: product.category,
+      allergens: product.allergens,
+      unit: currentUnit,
+      pricePerUnit: priceInRecipeUnit,
+      cost: !isNaN(qtyNum) ? qtyNum * priceInRecipeUnit : 0
+    };
+    setSubRecipes(newSubs);
+    setSuggestions(null);
+  };
+
+  const removeSubRecipePhoto = (subIdx: number, photoIdx: number) => {
+    const newSubs = [...subRecipes];
+    newSubs[subIdx].photos = newSubs[subIdx].photos.filter((_, i) => i !== photoIdx);
+    setSubRecipes(newSubs);
+  };
+
+  const handleAddSubRecipePhotos = (e: React.ChangeEvent<HTMLInputElement>, subIdx: number) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const newSubs = [...subRecipes];
+    const readers = Array.from(files).map((file: File) => {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readers).then(results => {
+      newSubs[subIdx].photos = [...(newSubs[subIdx].photos || []), ...results];
+      setSubRecipes(newSubs);
+    });
+  };
+
+  const handleSave = () => {
+    const totalCost = subRecipes.reduce((acc, sub) => acc + sub.ingredients.reduce((sAcc, ing) => sAcc + (ing.cost || 0), 0), 0);
+    onSave({
+      id: initialRecipe?.id || Date.now().toString(),
+      name, category, photo, creator, sourceUrl,
+      yieldQuantity, yieldUnit, totalCost,
+      subRecipes, platingInstructions, serviceDetails,
+      lastModified: Date.now()
+    });
+  };
+
+  const selectedServiceType = SERVICE_TYPES.find(s => s.name === serviceDetails.serviceType);
+
+  return (
+    <div className="bg-slate-100 min-h-screen pb-20 font-sans relative">
+      <div className="sticky top-0 z-40 bg-white border-b border-slate-200 px-8 py-4 shadow-sm flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <button type="button" onClick={onCancel} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><X size={24} /></button>
+          <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+            <Book className="text-amber-500" /> {initialRecipe ? 'Editar Ficha' : 'Nueva Ficha Técnica'}
+          </h2>
+        </div>
+        <button onClick={handleSave} className="px-8 py-3 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 flex items-center gap-2 shadow-xl font-black uppercase text-xs tracking-widest transition-all">
+          <Save size={18} /> Guardar Ficha
+        </button>
+      </div>
+
+      <div className="max-w-7xl mx-auto p-8 space-y-8">
+        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 p-8 grid grid-cols-1 md:grid-cols-12 gap-10">
+          <div className="md:col-span-3">
+            <div className="relative aspect-square bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden cursor-pointer shadow-inner group transition-all">
+              {photo ? <img src={photo} className="w-full h-full object-cover" alt="" /> : <div className="text-center"><ImageIcon size={48} className="text-slate-200 mx-auto" /><p className="text-[10px] font-black uppercase text-slate-300 mt-2">Portada Plato</p></div>}
+              <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <Camera className="text-white" size={32} />
+              </div>
+              <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => setPhoto(reader.result as string);
+                  reader.readAsDataURL(file);
+                }
+              }} />
+            </div>
+          </div>
+          <div className="md:col-span-9 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Nombre del Plato</label>
+                <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-xl font-serif font-black uppercase focus:ring-2 focus:ring-slate-200 transition-all" placeholder="Nombre de la receta" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Categorías</label>
+                <div className="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 max-h-32 overflow-y-auto custom-scrollbar">
+                  {settings.categories?.map(c => {
+                    const isSelected = category.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setCategory(category.filter(cat => cat !== c));
+                          } else {
+                            setCategory([...category, c]);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all border ${isSelected
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                          : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'
+                          }`}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 shadow-inner">
+                <label className="block text-[10px] font-black text-amber-700 uppercase mb-2 flex items-center gap-2">
+                  <Users size={12} /> Rendimiento (PAX)
+                </label>
+                <input type="number" value={yieldQuantity} onChange={e => setYieldQuantity(Number(e.target.value))} className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl font-black text-amber-900 outline-none focus:ring-2 focus:ring-amber-500 transition-all" />
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner">
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2">Unidad de Medida</label>
+                <input type="text" value={yieldUnit} onChange={e => setYieldUnit(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-black text-slate-800 outline-none focus:ring-2 focus:ring-slate-900 transition-all" placeholder="Ej: raciones, pax, ud..." />
+              </div>
+              <div className="p-4">
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2">Responsable / Creador</label>
+                <input type="text" value={creator} onChange={e => setCreator(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-black" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            {subRecipes.map((sub, idx) => (
+              <button key={idx} type="button" onClick={() => setActiveTab(idx)} className={`px-6 py-3 rounded-2xl text-xs font-black whitespace-nowrap transition-all border-2 ${activeTab === idx ? 'bg-slate-900 text-white border-slate-900 shadow-lg scale-105' : 'bg-white text-slate-400 border-white hover:border-slate-100'}`}>
+                {idx + 1}. {sub.name}
+              </button>
+            ))}
+            <button onClick={() => setSubRecipes([...subRecipes, { id: Date.now().toString(), name: 'Nueva Elaboración', ingredients: [], instructions: '', photos: [] }])} className="p-3 bg-white text-slate-400 rounded-2xl border border-dashed border-slate-200 hover:text-slate-900 hover:border-slate-400 transition-all"><Plus size={18} /></button>
+          </div>
+
+          {subRecipes[activeTab] && (
+            <div className="bg-white rounded-[3rem] border border-slate-200 p-8 shadow-sm space-y-8 overflow-visible">
+              <div className="flex justify-between items-center border-b pb-4">
+                <div className="flex items-center gap-3 w-full max-w-md">
+                  <Database className="text-slate-300" size={20} />
+                  <input type="text" value={subRecipes[activeTab].name} onChange={e => {
+                    const n = [...subRecipes]; n[activeTab].name = e.target.value; setSubRecipes(n);
+                  }} className="text-xl font-black uppercase tracking-tight outline-none w-full focus:ring-b-2 focus:ring-slate-900" placeholder="Nombre de la elaboración" />
+                </div>
+                <button onClick={() => { if (confirm('¿Eliminar esta elaboración?')) { const n = subRecipes.filter((_, i) => i !== activeTab); setSubRecipes(n); setActiveTab(0); } }} className="text-slate-300 hover:text-rose-500 transition-colors"><Trash2 size={20} /></button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 overflow-visible">
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span>Escandallo de Ingredientes</span>
+                    <button onClick={() => {
+                      const n = [...subRecipes]; n[activeTab].ingredients.push({ id: Math.random().toString(), name: '', quantity: '', unit: 'kg', allergens: [] }); setSubRecipes(n);
+                    }} className="text-indigo-600 flex items-center gap-1 font-black hover:text-indigo-800 transition-colors"><Plus size={14} /> Añadir Ingrediente</button>
+                  </div>
+                  <div className="space-y-2">
+                    {subRecipes[activeTab].ingredients.map((ing, iIdx) => {
+                      const exactMatch = ing.name && productDatabase.some(p => p.name.toUpperCase() === ing.name.toUpperCase());
+                      return (
+                        <div key={ing.id} className="grid grid-cols-12 gap-2 relative group items-center">
+                          <div className="col-span-6 relative">
+                            <input
+                              type="text"
+                              value={ing.name}
+                              onChange={e => updateIngredient(activeTab, iIdx, 'name', e.target.value)}
+                              className={`w-full px-4 py-3 text-xs font-black rounded-xl outline-none uppercase placeholder:opacity-30 border transition-all ${ing.name && !exactMatch ? 'bg-amber-50 border-amber-200 ring-2 ring-amber-100' : 'bg-slate-50 border-transparent focus:bg-white focus:border-slate-200'}`}
+                              placeholder="Nombre del ingrediente..."
+                            />
+                            {ing.name && !exactMatch && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenQuickAdd(ing.name)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all shadow-md flex items-center gap-1"
+                              >
+                                <DatabaseZap size={14} />
+                                <span className="text-[8px] font-black uppercase">Alta</span>
+                              </button>
+                            )}
+
+                            {suggestions && suggestions.idx === iIdx && (
+                              <div className="absolute z-[100] left-0 right-0 top-full mt-1 bg-white border border-slate-200 shadow-2xl rounded-2xl overflow-hidden max-h-60 overflow-y-auto">
+                                {suggestions.list.map(p => (
+                                  <div key={p.id} onClick={() => selectProduct(activeTab, iIdx, p)} className="px-5 py-4 hover:bg-indigo-50 cursor-pointer text-[10px] font-black uppercase flex justify-between border-b border-slate-50 last:border-0 transition-colors">
+                                    <span>{p.name}</span>
+                                    <span className="text-slate-300">{p.category}</span>
+                                  </div>
+                                ))}
+                                <div onClick={() => handleOpenQuickAdd(ing.name)} className="px-5 py-4 bg-amber-50 hover:bg-amber-100 cursor-pointer text-[10px] font-black uppercase flex items-center gap-3 text-amber-700 transition-colors border-t border-amber-100">
+                                  <DatabaseZap size={16} />
+                                  <span>Añadir "{ing.name}" como nuevo producto...</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <input type="text" value={ing.quantity} onKeyDown={handleKeyDown} onChange={e => updateIngredient(activeTab, iIdx, 'quantity', e.target.value)} className="col-span-2 text-right px-2 py-3 bg-white border border-slate-100 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-slate-900 transition-all" placeholder="0.00" />
+                          <select
+                            value={ing.unit}
+                            onChange={e => updateIngredient(activeTab, iIdx, 'unit', e.target.value)}
+                            className="col-span-1 text-[9px] font-black text-slate-400 uppercase bg-transparent outline-none border-b border-transparent hover:border-slate-300 focus:border-slate-900 transition-colors py-1 cursor-pointer appearance-none text-center"
+                          >
+                            {['kg', 'g', 'litro', 'dl', 'ml', 'unidad', 'unidades', 'manojo', 'cs', 'cp'].map(u => <option key={u} value={u}>{u.toUpperCase()}</option>)}
+                          </select>
+                          <span className="col-span-2 text-right font-mono font-black text-indigo-600 text-xs flex items-center justify-end">{ing.cost?.toFixed(2)}€</span>
+                          <button onClick={() => { const n = [...subRecipes]; n[activeTab].ingredients.splice(iIdx, 1); setSubRecipes(n); }} className="col-span-1 text-slate-200 hover:text-red-500 flex justify-center items-center transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-5 space-y-4">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Galería de Imágenes Técnicas</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(subRecipes[activeTab].photos || []).map((photoSrc, pIdx) => (
+                      <div key={pIdx} className="relative aspect-square rounded-2xl overflow-hidden shadow-md group border border-slate-100">
+                        <img src={photoSrc} className="w-full h-full object-cover" alt="" />
+                        <button onClick={() => removeSubRecipePhoto(activeTab, pIdx)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="relative aspect-square bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden cursor-pointer hover:border-indigo-400 transition-colors group shadow-inner">
+                      <div className="text-center">
+                        <Camera className="text-slate-200 mx-auto transition-transform group-hover:scale-110" size={32} />
+                        <p className="text-[8px] font-black text-slate-300 mt-1 uppercase tracking-widest">Añadir Foto</p>
+                      </div>
+                      <input type="file" multiple className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleAddSubRecipePhotos(e, activeTab)} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-slate-100">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest flex items-center gap-2"><Utensils size={14} /> Procedimiento</label>
+                <textarea value={subRecipes[activeTab].instructions} onChange={e => {
+                  const n = [...subRecipes]; n[activeTab].instructions = e.target.value; setSubRecipes(n);
+                }} className="w-full p-8 bg-slate-50 border border-slate-100 rounded-[2rem] text-sm min-h-[220px] leading-relaxed font-medium outline-none focus:ring-2 focus:ring-slate-900 transition-all font-serif" placeholder="Describe paso a paso los procesos técnicos de esta elaboración..." />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-slate-900 rounded-[3rem] shadow-2xl border border-slate-800 overflow-hidden text-white p-10 space-y-10 relative">
+          <div className="absolute top-0 right-0 p-10 opacity-5"><ChefHat size={120} /></div>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h3 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3">
+                <MessageSquare size={32} className="text-amber-500" /> Ficha de Servicio (Sala)
+              </h3>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Protocolos de pase, servicio y atención al cliente</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div className="space-y-8">
+              <div className="group">
+                <label className="block text-[10px] font-black text-amber-500 uppercase mb-3 tracking-widest flex items-center gap-2">
+                  <Info size={14} /> Explicación Sugerente del Plato
+                </label>
+                <textarea value={serviceDetails.clientDescription} onChange={e => setServiceDetails({ ...serviceDetails, clientDescription: e.target.value })} className="w-full bg-slate-800 border-2 border-slate-700 rounded-2xl p-5 text-sm min-h-[120px] outline-none italic placeholder:text-slate-600 focus:border-amber-500 transition-all text-slate-200 font-serif" placeholder="Describe cómo se le debe presentar el plato al cliente..." />
+              </div>
+              <div className="group">
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">Protocolo de Servicio</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+                  {SERVICE_TYPES.map(s => (
+                    <button key={s.id} type="button" onClick={() => setServiceDetails({ ...serviceDetails, serviceType: s.name })} className={`px-3 py-3 text-[9px] font-black rounded-xl border transition-all uppercase flex flex-col items-center gap-1 ${serviceDetails.serviceType === s.name ? 'bg-amber-500 border-amber-500 text-slate-900 shadow-lg scale-105' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>
+                      {s.name.replace('Servicio a la ', '').replace('Servicio de ', '')}
+                    </button>
+                  ))}
+                </div>
+                {selectedServiceType && (
+                  <div className="mb-4 bg-slate-800/50 border border-amber-500/20 p-4 rounded-xl animate-fadeIn">
+                    <p className="text-[10px] font-black text-amber-500 uppercase flex items-center gap-2 mb-1">
+                      <HelpCircle size={10} /> Definición del Protocolo
+                    </p>
+                    <p className="text-[11px] text-slate-400 font-serif italic leading-relaxed">
+                      {selectedServiceType.desc}
+                    </p>
+                  </div>
+                )}
+                <input type="text" value={serviceDetails.serviceType} onChange={e => setServiceDetails({ ...serviceDetails, serviceType: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-xs outline-none focus:ring-2 focus:ring-amber-500 font-black uppercase" />
+              </div>
+            </div>
+
+            <div className="space-y-8">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-3 tracking-widest flex items-center gap-2">
+                  <Thermometer size={14} /> Temperatura de Pase
+                </label>
+                <div className="flex gap-2 mb-2 overflow-x-auto pb-2 custom-scrollbar">
+                  {Object.keys(TEMPERATURE_DICTIONARY).map((key) => (
+                    <button key={key} type="button" onClick={() => {
+                      const temps = TEMPERATURE_DICTIONARY[key as keyof typeof TEMPERATURE_DICTIONARY];
+                      if (temps && temps.length > 0) setServiceDetails({ ...serviceDetails, servingTemp: temps[0].value });
+                    }} className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-[9px] font-bold text-slate-300 hover:text-white hover:border-amber-500 whitespace-nowrap transition-all">
+                      {key}
+                    </button>
+                  ))}
+                </div>
+                <input type="text" value={serviceDetails.servingTemp} onChange={e => setServiceDetails({ ...serviceDetails, servingTemp: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-5 py-4 text-sm font-black text-amber-500 outline-none focus:ring-2 focus:ring-amber-500 uppercase" placeholder="Ej: 60-65 ºC" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-3 tracking-widest flex items-center gap-2">
+                  <Utensils size={14} /> Marcaje y Cubertería (Sugerencias)
+                </label>
+                <div className="flex gap-2 mb-2 overflow-x-auto pb-2 custom-scrollbar">
+                  {Object.entries(CUTLERY_DICTIONARY).map(([key, val]) => (
+                    <button key={key} type="button" onClick={() => setServiceDetails({ ...serviceDetails, cutlery: val })} className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-[9px] font-bold text-slate-300 hover:text-white hover:border-amber-500 whitespace-nowrap transition-all">
+                      {key}
+                    </button>
+                  ))}
+                </div>
+                <textarea value={serviceDetails.cutlery} onChange={e => setServiceDetails({ ...serviceDetails, cutlery: e.target.value })} className="w-full bg-slate-800 border border-slate-700 rounded-2xl p-5 text-sm min-h-[100px] outline-none focus:ring-2 focus:ring-amber-500 font-bold uppercase placeholder:text-slate-600" placeholder="Ej: Cubiertos de pescado..." />
+              </div>
+            </div>
+          </div>
+          <div className="pt-10 border-t border-white/5">
+            <label className="block text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">Instrucciones de Presentación</label>
+            <textarea value={platingInstructions} onChange={e => setPlatingInstructions(e.target.value)} className="w-full bg-slate-900 border-2 border-dashed border-slate-700 rounded-[2rem] p-8 text-sm min-h-[150px] outline-none focus:border-amber-500 transition-colors font-serif" placeholder="Describe el paso final antes del pase..." />
+          </div>
+        </div>
+      </div>
+
+      {quickAddProduct && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#111322]/90 backdrop-blur-md p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-white rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] max-w-[540px] w-full overflow-visible border border-white/10 my-8">
+            <div className="bg-[#111322] text-white px-10 py-10 flex justify-between items-center rounded-t-[2.5rem]">
+              <h2 className="text-[26px] font-black uppercase tracking-tight">Añadir Género</h2>
+              <button onClick={() => setQuickAddProduct(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                <X size={32} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveQuickProduct} className="p-10 space-y-9 overflow-visible">
+              <div className="relative">
+                <label className="block text-[10px] font-black text-[#94A3B8] uppercase mb-2 tracking-[0.1em]">Familia / Categoría de Pedido</label>
+                <div className="relative">
+                  <input
+                    required type="text" value={familySearch}
+                    onFocus={() => setShowFamilyList(true)}
+                    onBlur={() => setTimeout(() => setShowFamilyList(false), 200)}
+                    onChange={e => { setFamilySearch(e.target.value.toUpperCase()); setShowFamilyList(true); }}
+                    className="w-full px-7 py-5 bg-[#F8FAFC] border-none rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-slate-100 text-slate-700 text-lg shadow-sm"
+                    placeholder="BUSCAR O CREAR FAMILIA..."
+                  />
+                  <ChevronDown className={`absolute right-7 top-1/2 -translate-y-1/2 text-slate-300 transition-transform ${showFamilyList ? 'rotate-180' : ''}`} size={20} />
+                </div>
+                {showFamilyList && (
+                  <div className="absolute z-[110] left-0 right-0 top-full mt-2 bg-white border border-slate-100 shadow-2xl rounded-2xl overflow-hidden max-h-48 overflow-y-auto animate-fadeIn custom-scrollbar">
+                    {filteredFamilies.length > 0 ? (
+                      filteredFamilies.map(f => (
+                        <div key={f} onClick={() => { setFamilySearch(f); setShowFamilyList(false); }} className="px-6 py-4 hover:bg-slate-50 cursor-pointer text-[10px] font-black uppercase text-slate-600 border-b border-slate-50 last:border-0 flex justify-between items-center">
+                          <span>{f}</span>
+                          <CheckCircle2 size={12} className="text-slate-200" />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-6 py-4 text-[10px] font-black text-amber-500 uppercase bg-amber-50">Crear familia: "{familySearch}"</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-[#94A3B8] uppercase mb-2 tracking-[0.1em]">Nombre del Producto</label>
+                <input required type="text" value={quickAddProduct.name} onChange={e => setQuickAddProduct({ ...quickAddProduct, name: e.target.value.toUpperCase() })} className="w-full px-7 py-5 bg-[#F8FAFC] border-none rounded-2xl font-black uppercase outline-none focus:ring-2 focus:ring-slate-100 text-slate-700 text-lg shadow-sm" placeholder="EJ: SOLOMILLO DE TERNERA" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-8">
+                <div>
+                  <label className="block text-[10px] font-black text-[#94A3B8] uppercase mb-2 tracking-[0.1em]">Precio Mercado €</label>
+                  <div className="relative">
+                    <input required type="number" step="0.0001" value={quickAddProduct.pricePerUnit} onKeyDown={handleKeyDown} onChange={e => setQuickAddProduct({ ...quickAddProduct, pricePerUnit: parseFloat(e.target.value) || 0 })} className="w-full px-7 py-5 bg-[#F8FAFC] border-none rounded-2xl font-black outline-none focus:ring-2 focus:ring-slate-100 text-slate-700 text-lg shadow-sm" />
+                    <span className="absolute right-7 top-1/2 -translate-y-1/2 text-[#CBD5E1] font-bold text-xl">€</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-[#94A3B8] uppercase mb-2 tracking-[0.1em]">Unidad</label>
+                  <div className="relative">
+                    <select value={quickAddProduct.unit} onChange={e => setQuickAddProduct({ ...quickAddProduct, unit: e.target.value })} className="w-full px-7 py-5 bg-[#F8FAFC] border-none rounded-2xl font-black outline-none appearance-none cursor-pointer text-slate-700 text-lg shadow-sm">
+                      <option value="kg">KG</option>
+                      <option value="g">G</option>
+                      <option value="litro">LITRO</option>
+                      <option value="dl">DL</option>
+                      <option value="ml">ML</option>
+                      <option value="unidad">UNIDAD</option>
+                      <option value="unidades">UNIDADES</option>
+                      <option value="manojo">MANOJO</option>
+                      <option value="cs">CS</option>
+                      <option value="cp">CP</option>
+                    </select>
+                    <ChevronDown className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={20} />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-[#94A3B8] uppercase mb-5 tracking-[0.1em]">Alérgenos Declarados (Nombre Completo)</label>
+                <div className="grid grid-cols-2 gap-3 bg-[#F8FAFC] p-7 rounded-[2.5rem] border border-slate-50 max-h-60 overflow-y-auto custom-scrollbar shadow-inner">
+                  {ALLERGEN_LIST.map(a => {
+                    const isSel = quickAddProduct.allergens.includes(a);
+                    return (
+                      <button key={a} type="button" onClick={() => {
+                        const current = quickAddProduct.allergens;
+                        const updated = isSel ? current.filter(x => x !== a) : [...current, a];
+                        setQuickAddProduct({ ...quickAddProduct, allergens: updated });
+                      }} className={`py-3 px-4 rounded-xl text-[9px] font-black border-2 transition-all uppercase flex flex-col items-center justify-center text-center leading-tight gap-1 ${isSel ? 'bg-white border-[#111322] text-[#111322] shadow-md scale-105' : 'bg-white border-transparent text-[#CBD5E1] hover:text-slate-500 hover:border-slate-100'}`}>
+                        <span className="text-xl">{ALLERGEN_ICONS[a] || '⚠️'}</span>
+                        <span>{a}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-6">
+                <button type="submit" className="w-full py-6 bg-[#111322] text-white rounded-[1.25rem] font-black uppercase text-base tracking-[0.2em] shadow-2xl hover:bg-slate-800 transition-all active:scale-[0.98] transform">
+                  Guardar en Catálogo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
