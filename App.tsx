@@ -51,20 +51,20 @@ const syncRecipesWithProducts = (recipes: Recipe[], products: Product[]): Recipe
         if (product) {
           const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
           if (!isNaN(qtyNum)) {
-            // Note: quantity is NOT changed here, only price and unit sync
-            // Recalculate cost based on potentially different unit in product database
-            // If product database says "litro" data for price, but recipe says "ml"
-            // we should convert the quantity to the product's unit for calculation
-            const convertedQty = convertUnit(qtyNum, ing.unit, product.unit);
-            const newCost = convertedQty * product.pricePerUnit;
+            // Respect the RECIPE'S unit. Calculate price relative to that unit.
+            // Formula: PriceInRecipeUnit = PriceInProductUnit * Convert(1, RecipeUnit, ProductUnit)
+            const factor = convertUnit(1, ing.unit, product.unit);
+            const priceInRecipeUnit = product.pricePerUnit * factor;
+            const newCost = qtyNum * priceInRecipeUnit;
 
-            if (ing.pricePerUnit !== product.pricePerUnit || ing.unit !== product.unit || ing.cost !== newCost) {
+            const allergensChanged = JSON.stringify(ing.allergens) !== JSON.stringify(product.allergens);
+            if (ing.pricePerUnit !== priceInRecipeUnit || ing.cost !== newCost || allergensChanged) {
               subHasChanges = true;
               return {
                 ...ing,
-                pricePerUnit: product.pricePerUnit,
-                unit: product.unit,
+                pricePerUnit: priceInRecipeUnit,
                 allergens: product.allergens,
+                category: product.category,
                 cost: newCost
               };
             }
