@@ -96,9 +96,9 @@ export const RecipeView: React.FC<RecipeViewProps> = ({ recipe, settings, onBack
         </div>
 
         <div className="space-y-6">
-          <h3 className="font-black text-slate-900 uppercase tracking-tighter text-xs border-b-2 border-slate-900 pb-1 flex justify-between items-end">
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-tighter text-xs border-b-2 border-slate-900 pb-1 flex justify-between items-end">
             <span>DESARROLLO TÉCNICO</span>
-            <span className="text-[10px] text-slate-500 font-normal normal-case">Escandallo base: {dynamicPax} pax</span>
+            <span className="text-[10px] text-slate-500 font-normal normal-case">Escandallo base: {recipe.yieldQuantity} pax</span>
           </h3>
 
           {/* Layout 50/50: Foto + Alérgenos Grid 7x2 */}
@@ -213,7 +213,7 @@ export const RecipeView: React.FC<RecipeViewProps> = ({ recipe, settings, onBack
           <div className="flex-grow pt-1">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500 mb-3">Explicación Sugerente (Servicio)</p>
             <p className="text-lg font-medium italic leading-relaxed text-slate-100 font-serif opacity-90">
-              "{recipe.serviceDetails.clientDescription || 'No definida.'}"
+              "{(recipe.serviceDetails?.clientDescription) || 'No definida.'}"
             </p>
           </div>
         </div>
@@ -224,16 +224,16 @@ export const RecipeView: React.FC<RecipeViewProps> = ({ recipe, settings, onBack
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
               <Thermometer size={12} /> Temperatura
             </p>
-            <span className="text-sm font-black text-amber-500">{recipe.serviceDetails.servingTemp || '--'}</span>
+            <span className="text-sm font-black text-amber-500">{(recipe.serviceDetails?.servingTemp) || '--'}</span>
           </div>
 
           <div className="bg-white/5 p-5 rounded-2xl border border-white/5 backdrop-blur-sm">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
               <Info size={12} /> Protocolo de Servicio
             </p>
-            <span className="text-[10px] font-black uppercase text-slate-200 leading-tight block mb-1">{recipe.serviceDetails.serviceType}</span>
+            <span className="text-[10px] font-black uppercase text-slate-200 leading-tight block mb-1">{(recipe.serviceDetails?.serviceType) || 'AMERICANA'}</span>
             <span className="text-[9px] text-slate-400 italic leading-tight block">
-              {SERVICE_TYPES.find(s => s.name === recipe.serviceDetails.serviceType)?.desc || ''}
+              {SERVICE_TYPES.find(s => s.name === recipe.serviceDetails?.serviceType)?.desc || ''}
             </span>
           </div>
 
@@ -241,7 +241,7 @@ export const RecipeView: React.FC<RecipeViewProps> = ({ recipe, settings, onBack
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
               <UtensilsCrossed size={12} /> Cubertería
             </p>
-            <span className="text-[10px] font-bold text-slate-300 uppercase leading-snug block">{recipe.serviceDetails.cutlery || 'Estándar'}</span>
+            <span className="text-[10px] font-bold text-slate-300 uppercase leading-snug block">{(recipe.serviceDetails?.cutlery) || 'Estándar'}</span>
           </div>
 
           <div className="bg-amber-500/10 p-5 rounded-2xl border border-amber-500/20">
