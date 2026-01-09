@@ -172,7 +172,15 @@ function App() {
         instructions: legacy.instructions || '',
         photos: legacy.photo ? [legacy.photo] : []
       }],
-      platingInstructions: legacy.platingInstructions || ''
+      platingInstructions: legacy.platingInstructions || '',
+      serviceDetails: legacy.serviceDetails || {
+        presentation: '',
+        servingTemp: '',
+        cutlery: '',
+        passTime: '',
+        serviceType: 'Servicio a la Americana',
+        clientDescription: ''
+      }
     };
   };
 
@@ -288,11 +296,3 @@ function App() {
           onOpenMenuPlanner={() => setViewState('MENU_PLANNER')}
           onOpenProductDB={() => setViewState('PRODUCT_DB')}
           onOpenAIBridge={() => setViewState('AI_BRIDGE')}
-          onLogout={handleLogout}
-        />
-      )}
-    </>
-  );
-}
-
-export default App;
