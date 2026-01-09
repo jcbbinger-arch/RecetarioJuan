@@ -12,6 +12,84 @@ import { LandingPage } from './components/LandingPage';
 import { AIBridge } from './components/AIBridge';
 import { INITIAL_PRODUCT_DATABASE } from './data/products';
 
+const convertUnit = (qty: number, fromUnit: string, toUnit: string): number => {
+  const f = fromUnit.toLowerCase();
+  const t = toUnit.toLowerCase();
+  if (f === t) return qty;
+
+  // Mass
+  if (f === 'g' && t === 'kg') return qty / 1000;
+  if (f === 'kg' && t === 'g') return qty * 1000;
+
+  // Volume
+  const getMl = (v: number, u: string) => {
+    if (u === 'l' || u === 'litro') return v * 1000;
+    if (u === 'dl') return v * 100;
+    if (u === 'cl') return v * 10;
+    return v; // assume ml
+  };
+
+  const volumeUnits = ['l', 'litro', 'dl', 'cl', 'ml'];
+  if (volumeUnits.includes(f) && volumeUnits.includes(t)) {
+    const ml = getMl(qty, f);
+    if (t === 'l' || t === 'litro') return ml / 1000;
+    if (t === 'dl') return ml / 100;
+    if (t === 'cl') return ml / 10;
+    return ml;
+  }
+
+  return qty;
+};
+
+const syncRecipesWithProducts = (recipes: Recipe[], products: Product[]): Recipe[] => {
+  return recipes.map(recipe => {
+    let recipeHasChanges = false;
+    const updatedSubRecipes = (recipe.subRecipes || []).map(sub => {
+      let subHasChanges = false;
+      const updatedIngredients = sub.ingredients.map(ing => {
+        const product = products.find(p => p.name.toUpperCase() === ing.name.toUpperCase());
+        if (product) {
+          const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+          if (!isNaN(qtyNum)) {
+            // Note: quantity is NOT changed here, only price and unit sync
+            // Recalculate cost based on potentially different unit in product database
+            // If product database says "litro" data for price, but recipe says "ml"
+            // we should convert the quantity to the product's unit for calculation
+            const convertedQty = convertUnit(qtyNum, ing.unit, product.unit);
+            const newCost = convertedQty * product.pricePerUnit;
+
+            if (ing.pricePerUnit !== product.pricePerUnit || ing.unit !== product.unit || ing.cost !== newCost) {
+              subHasChanges = true;
+              return {
+                ...ing,
+                pricePerUnit: product.pricePerUnit,
+                unit: product.unit,
+                allergens: product.allergens,
+                cost: newCost
+              };
+            }
+          }
+        }
+        return ing;
+      });
+
+      if (subHasChanges) {
+        recipeHasChanges = true;
+        return { ...sub, ingredients: updatedIngredients };
+      }
+      return sub;
+    });
+
+    if (recipeHasChanges) {
+      const totalCost = updatedSubRecipes.reduce((acc, sub) =>
+        acc + sub.ingredients.reduce((sAcc, ing) => sAcc + (ing.cost || 0), 0), 0
+      );
+      return { ...recipe, subRecipes: updatedSubRecipes, totalCost };
+    }
+    return recipe;
+  });
+};
+
 type ViewState = 'LANDING' | 'DASHBOARD' | 'EDITOR' | 'VIEWER' | 'MENU_PLANNER' | 'PRODUCT_DB' | 'AI_BRIDGE';
 
 const defaultSettings: AppSettings = {
@@ -182,9 +260,16 @@ function App() {
           products={productDatabase}
           onBack={() => setViewState('DASHBOARD')}
           onAdd={(p) => setProductDatabase([p, ...productDatabase])}
-          onEdit={(p) => setProductDatabase(productDatabase.map(old => old.id === p.id ? p : old))}
+          onEdit={(p) => {
+            const updatedProducts = productDatabase.map(old => old.id === p.id ? p : old);
+            setProductDatabase(updatedProducts);
+            setRecipes(syncRecipesWithProducts(recipes, updatedProducts));
+          }}
           onDelete={(id) => setProductDatabase(productDatabase.filter(p => p.id !== id))}
-          onImport={(list) => setProductDatabase([...list])}
+          onImport={(list) => {
+            setProductDatabase([...list]);
+            setRecipes(syncRecipesWithProducts(recipes, list));
+          }}
           settings={settings}
           onSettingsChange={setSettings}
         />
