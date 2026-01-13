@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:wght@300;400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @media print {
+    @page {
+      margin: 1.5cm;
+      size: portrait;
+      @bottom-center {
+        content: "Página " counter(page) " de " counter(pages);
+        font-family: 'Inter', sans-serif;
+        font-size: 9px;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+    }
+
+    .no-print {
+      display: none !important;
+    }
+
+    .print-only {
+      display: block !important;
+    }
+
+    body {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      background: white;
+    }
+
+    .page-break {
+      page-break-before: always;
+    }
+  }
+}
+
+.print-only {
+  display: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
