@@ -146,7 +146,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       <div className="max-w-7xl mx-auto px-6 mt-12">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
           {filteredRecipes.length > 0 ? filteredRecipes.map(recipe => {
             const costPerPortion = recipe.totalCost && recipe.yieldQuantity ? (recipe.totalCost / recipe.yieldQuantity).toFixed(2) : '0.00';
             return (
@@ -180,18 +180,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 </div>
 
-                <div className="p-4 flex-grow flex flex-col justify-between space-y-4">
+                <div className="p-3 flex-grow flex flex-col justify-between space-y-2">
                   <div>
-                    <h3 className="text-[11px] font-black text-slate-800 leading-tight uppercase tracking-tight line-clamp-2 group-hover:text-indigo-600 transition-colors">{recipe.name}</h3>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
-                      <Users size={8} /> {recipe.yieldQuantity} {(recipe.yieldUnit || '').substring(0, 4)}
+                    <h3 className="text-[9px] font-black text-slate-800 leading-tight uppercase tracking-tight line-clamp-2 group-hover:text-indigo-600 transition-colors">{recipe.name}</h3>
+                    <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                      <Users size={7} /> {recipe.yieldQuantity} PAX
                     </p>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
-                    <p className="text-[7px] font-black text-slate-300 uppercase truncate max-w-[60%]">{recipe.creator || settings.teacherName}</p>
-                    <button onClick={() => onView(recipe)} className="flex items-center gap-1.5 text-[8px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-all group/btn">
-                      Ver <Eye size={12} className="group-hover/btn:translate-x-0.5 transition-transform" />
+                  <div className="pt-2 border-t border-slate-50 flex items-center justify-between">
+                    <p className="text-[6px] font-black text-slate-300 uppercase truncate max-w-[50%]">{recipe.creator || settings.teacherName}</p>
+                    <button onClick={() => onView(recipe)} className="flex items-center gap-1 text-[7px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest transition-all group/btn">
+                      Ver <Eye size={10} className="group-hover/btn:translate-x-0.5 transition-transform" />
                     </button>
                   </div>
                 </div>

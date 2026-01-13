@@ -203,48 +203,45 @@ export const RecipeView: React.FC<RecipeViewProps> = ({ recipe, onBack, settings
             <ChefHat size={200} />
           </div>
 
-          <div className="flex items-start gap-6 mb-8 border-b border-white/10 pb-8">
-            <div className="bg-amber-500 p-3 rounded-2xl text-slate-900 shrink-0 shadow-lg shadow-amber-900/20">
-              <MessageSquare size={28} />
+          <div className="flex items-start gap-4 mb-6 border-b border-white/10 pb-6">
+            <div className="bg-amber-500 p-2 rounded-xl text-slate-900 shrink-0 shadow-lg shadow-amber-900/20">
+              <MessageSquare size={20} />
             </div>
-            <div className="flex-grow pt-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500 mb-3">Explicación Sugerente (Servicio)</p>
-              <p className="text-lg font-medium italic leading-relaxed text-slate-100 font-serif opacity-90">
+            <div className="flex-grow pt-0">
+              <p className="text-[8px] font-black uppercase tracking-[0.2em] text-amber-500 mb-1">Explicación Sugerente (Servicio)</p>
+              <p className="text-sm font-medium italic leading-relaxed text-slate-100 font-serif opacity-90">
                 "{(recipe.serviceDetails?.clientDescription) || 'No definida.'}"
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-6 mb-8">
-            <div className="bg-white/5 p-5 rounded-2xl border border-white/5 backdrop-blur-sm">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <Thermometer size={12} /> Temperatura
+          <div className="grid grid-cols-4 gap-3">
+            <div className="bg-white/5 p-3 rounded-xl border border-white/5 backdrop-blur-sm">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <Thermometer size={10} /> Temp
               </p>
-              <span className="text-sm font-black text-amber-500">{(recipe.serviceDetails?.servingTemp) || '--'}</span>
+              <span className="text-xs font-black text-amber-500">{(recipe.serviceDetails?.servingTemp) || '--'}</span>
             </div>
 
-            <div className="bg-white/5 p-5 rounded-2xl border border-white/5 backdrop-blur-sm">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <Info size={12} /> Protocolo de Servicio
+            <div className="bg-white/5 p-3 rounded-xl border border-white/5 backdrop-blur-sm">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <Info size={10} /> Protocolo
               </p>
-              <span className="text-[10px] font-black uppercase text-slate-200 leading-tight block mb-1">{(recipe.serviceDetails?.serviceType) || 'AMERICANA'}</span>
-              <span className="text-[9px] text-slate-400 italic leading-tight block">
-                {SERVICE_TYPES.find(s => s.name === recipe.serviceDetails?.serviceType)?.desc || ''}
-              </span>
+              <span className="text-[8px] font-black uppercase text-slate-200 leading-tight block truncate">{(recipe.serviceDetails?.serviceType) || 'AMERICANA'}</span>
             </div>
 
-            <div className="bg-white/5 p-5 rounded-2xl border border-white/5 backdrop-blur-sm">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <UtensilsCrossed size={12} /> Cubertería
+            <div className="bg-white/5 p-3 rounded-xl border border-white/5 backdrop-blur-sm">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <UtensilsCrossed size={10} /> Cubiertos
               </p>
-              <span className="text-[10px] font-bold text-slate-300 uppercase leading-snug block">{(recipe.serviceDetails?.cutlery) || 'Estándar'}</span>
+              <span className="text-[8px] font-bold text-slate-300 uppercase leading-snug block truncate">{(recipe.serviceDetails?.cutlery) || 'Estándar'}</span>
             </div>
 
-            <div className="bg-amber-500/10 p-5 rounded-2xl border border-amber-500/20">
-              <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <Users size={12} /> Rendimiento
+            <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
+              <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <Users size={10} /> PAX
               </p>
-              <span className="text-xl font-black text-amber-500 leading-none">{dynamicPax} <span className="text-xs opacity-70">{(recipe.yieldUnit || '').substring(0, 3)}</span></span>
+              <span className="text-sm font-black text-amber-500 leading-none">{dynamicPax}</span>
             </div>
           </div>
         </div>
