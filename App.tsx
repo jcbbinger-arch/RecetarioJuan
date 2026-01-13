@@ -11,35 +11,8 @@ import { ProductDatabaseViewer } from './components/ProductDatabaseViewer';
 import { LandingPage } from './components/LandingPage';
 import { AIBridge } from './components/AIBridge';
 import { INITIAL_PRODUCT_DATABASE } from './data/products';
+import { convertUnit } from './utils';
 
-const convertUnit = (qty: number, fromUnit: string, toUnit: string): number => {
-  const f = fromUnit.toLowerCase();
-  const t = toUnit.toLowerCase();
-  if (f === t) return qty;
-
-  // Mass
-  if (f === 'g' && t === 'kg') return qty / 1000;
-  if (f === 'kg' && t === 'g') return qty * 1000;
-
-  // Volume
-  const getMl = (v: number, u: string) => {
-    if (u === 'l' || u === 'litro') return v * 1000;
-    if (u === 'dl') return v * 100;
-    if (u === 'cl') return v * 10;
-    return v; // assume ml
-  };
-
-  const volumeUnits = ['l', 'litro', 'dl', 'cl', 'ml'];
-  if (volumeUnits.includes(f) && volumeUnits.includes(t)) {
-    const ml = getMl(qty, f);
-    if (t === 'l' || t === 'litro') return ml / 1000;
-    if (t === 'dl') return ml / 100;
-    if (t === 'cl') return ml / 10;
-    return ml;
-  }
-
-  return qty;
-};
 
 const syncRecipesWithProducts = (recipes: Recipe[], products: Product[]): Recipe[] => {
   return recipes.map(recipe => {
@@ -296,3 +269,11 @@ function App() {
           onOpenMenuPlanner={() => setViewState('MENU_PLANNER')}
           onOpenProductDB={() => setViewState('PRODUCT_DB')}
           onOpenAIBridge={() => setViewState('AI_BRIDGE')}
+          onLogout={handleLogout}
+        />
+      )}
+    </>
+  );
+}
+
+export default App;
