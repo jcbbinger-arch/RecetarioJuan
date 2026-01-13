@@ -12,7 +12,7 @@ import {
 import {
   Save, X, Plus, Trash2, Image as ImageIcon,
   Book, Utensils, Thermometer, Info, Database, MessageSquare, ChevronDown, CheckCircle2,
-  ChefHat, Users, Camera, DatabaseZap, Check, HelpCircle, AlertCircle
+  ChefHat, Users, Camera, DatabaseZap, Check, HelpCircle, AlertCircle, Globe, Lock
 } from 'lucide-react';
 
 interface RecipeEditorProps {
@@ -49,6 +49,7 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
   const [serviceDetails, setServiceDetails] = useState<ServiceDetails>(emptyServiceDetails);
   const [subRecipes, setSubRecipes] = useState<SubRecipe[]>([]);
   const [manualAllergens, setManualAllergens] = useState<Allergen[]>([]);
+  const [isPublic, setIsPublic] = useState(false);
   const [activeTab, setActiveTab] = useState<number>(0);
   const [suggestions, setSuggestions] = useState<{ idx: number, list: Product[] } | null>(null);
 
@@ -80,6 +81,7 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
       setServiceDetails(initialRecipe.serviceDetails || emptyServiceDetails);
       setPlatingInstructions(initialRecipe.platingInstructions || '');
       setManualAllergens(initialRecipe.manualAllergens || []);
+      setIsPublic(!!initialRecipe.isPublic);
       setSubRecipes((initialRecipe.subRecipes || []).map(sr => ({
         ...sr,
         photos: sr.photos || ((sr as any).photo ? [(sr as any).photo] : [])
@@ -89,6 +91,22 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
       setCreator(settings.teacherName);
     }
   }, [initialRecipe, settings.teacherName]);
+
+  const derivedAllergensDetails = useMemo(() => {
+    const details = new Map<Allergen, string[]>();
+    subRecipes.forEach(sub => {
+      sub.ingredients.forEach(ing => {
+        ing.allergens?.forEach(a => {
+          const list = details.get(a) || [];
+          if (!list.includes(ing.name)) list.push(ing.name);
+          details.set(a, list);
+        });
+      });
+    });
+    return details;
+  }, [subRecipes]);
+
+  const derivedAllergens = useMemo(() => Array.from(derivedAllergensDetails.keys()), [derivedAllergensDetails]);
 
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
@@ -138,12 +156,11 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
         const newQtyNum = convertUnit(oldQtyNum, oldUnit, newUnit);
         ing.quantity = formatQuantity(newQtyNum);
 
-        // Adjust pricePerUnit relative to the NEW unit to keep total cost consistent 
-        // IF we have a product match
-        const product = productDatabase.find(p => p.name.toUpperCase() === ing.name.toUpperCase());
-        if (product) {
-          const factor = convertUnit(1, newUnit, product.unit);
-          ing.pricePerUnit = product.pricePerUnit * factor;
+        // Adjust pricePerUnit relative to the NEW unit to keep total cost consistent
+        // We use the same conversion factor for the price (inversely)
+        const factor = convertUnit(1, oldUnit, newUnit);
+        if (factor > 0) {
+          ing.pricePerUnit = (ing.pricePerUnit || 0) / factor;
         }
 
         ing.cost = calculateIngredientCost(newQtyNum, ing.pricePerUnit || 0);
@@ -305,6 +322,7 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
       yieldQuantity, yieldUnit, totalCost,
       subRecipes, platingInstructions, serviceDetails,
       manualAllergens,
+      isPublic,
       lastModified: Date.now()
     });
   };
@@ -320,9 +338,17 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
             <Book className="text-amber-500" /> {initialRecipe ? 'Editar Ficha' : 'Nueva Ficha Técnica'}
           </h2>
         </div>
-        <button onClick={handleSave} className="px-8 py-3 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 flex items-center gap-2 shadow-xl font-black uppercase text-xs tracking-widest transition-all">
-          <Save size={18} /> Guardar Ficha
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setIsPublic(!isPublic)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isPublic ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}
+          >
+            {isPublic ? <><Globe size={14} /> Pública</> : <><Lock size={14} /> Privada</>}
+          </button>
+          <button onClick={handleSave} className="px-8 py-3 bg-slate-900 text-white rounded-2xl hover:bg-slate-800 flex items-center gap-2 shadow-xl font-black uppercase text-xs tracking-widest transition-all">
+            <Save size={18} /> Guardar Ficha
+          </button>
+        </div>
       </div>
 
       <div className="max-w-7xl mx-auto p-8 space-y-8">
@@ -394,26 +420,55 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
           </div>
 
           <div className="border-t border-slate-100 pt-8">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertCircle size={14} className="text-rose-500" />
-              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Alérgenos por Contaminación Cruzada (Trazas)</label>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={14} className="text-rose-500" />
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Matriz de Alérgenos (Real-Time)</label>
+              </div>
+              <div className="flex gap-4 text-[8px] font-black uppercase tracking-widest">
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-indigo-500"></div> Presente en ingrediente</div>
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full border border-rose-400 bg-rose-50"></div> Contaminación Cruzada</div>
+              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 lg:grid-cols-14 gap-2">
               {ALLERGEN_LIST.map(a => {
-                const isSel = manualAllergens.includes(a);
+                const isManual = manualAllergens.includes(a);
+                const isDerived = derivedAllergens.includes(a);
+                const sourceIngredients = derivedAllergensDetails.get(a) || [];
+
                 return (
-                  <button
-                    key={a}
-                    type="button"
-                    onClick={() => {
-                      const updated = isSel ? manualAllergens.filter(x => x !== a) : [...manualAllergens, a];
-                      setManualAllergens(updated);
-                    }}
-                    className={`py-3 px-1 rounded-xl text-[8px] font-black border-2 transition-all uppercase flex flex-col items-center justify-center text-center leading-none gap-1 h-20 ${isSel ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-md scale-105' : 'bg-slate-50 border-transparent text-slate-300 hover:border-slate-200 hover:text-slate-400'}`}
-                  >
-                    <span className="text-lg">{ALLERGEN_ICONS[a] || '⚠️'}</span>
-                    <span className="mt-1">{a.split(' ')[0]}</span>
-                  </button>
+                  <div key={a} className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = isManual ? manualAllergens.filter(x => x !== a) : [...manualAllergens, a];
+                        setManualAllergens(updated);
+                      }}
+                      className={`w-full py-3 px-1 rounded-xl text-[8px] font-black border-2 transition-all uppercase flex flex-col items-center justify-center text-center leading-none gap-1 h-20 relative overflow-hidden ${isManual
+                        ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-md scale-105 z-10'
+                        : isDerived
+                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                          : 'bg-slate-50 border-transparent text-slate-300 hover:border-slate-200 hover:text-slate-400'
+                        }`}
+                    >
+                      {isDerived && (
+                        <div className="absolute top-1 right-1">
+                          <Check size={10} className="text-indigo-500" />
+                        </div>
+                      )}
+                      <span className="text-lg">{ALLERGEN_ICONS[a] || '⚠️'}</span>
+                      <span className="mt-1">{a.split(' ')[0]}</span>
+                    </button>
+
+                    {isDerived && sourceIngredients.length > 0 && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[150px] bg-slate-900 text-white text-[7px] p-2 rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                        <p className="font-black border-b border-white/10 pb-1 mb-1 uppercase tracking-tighter">Presente en:</p>
+                        <ul className="space-y-0.5">
+                          {sourceIngredients.map((ing, k) => <li key={k} className="truncate">• {ing}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
