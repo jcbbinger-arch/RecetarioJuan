@@ -62,3 +62,39 @@ export const calculateIngredientCost = (quantity: string | number, pricePerUnit:
     if (isNaN(qtyNum) || !pricePerUnit) return 0;
     return qtyNum * pricePerUnit;
 };
+
+/**
+ * Normalizes a value to a base unit (g for mass, ml for volume) for calculation.
+ */
+export const normalizeToBasics = (qty: number, unit: string): { value: number, base: 'g' | 'ml' | 'ud' } => {
+    const u = unit?.toLowerCase().trim() || '';
+    // Mass -> g
+    if (u === 'kg' || u === 'kilo' || u === 'kilogramo' || u === 'kilogramos') return { value: qty * 1000, base: 'g' };
+    if (u === 'g' || u === 'gramo' || u === 'gramos') return { value: qty, base: 'g' };
+    if (u === 'mg' || u === 'miligramo') return { value: qty / 1000, base: 'g' };
+
+    // Volume -> ml
+    if (u === 'l' || u === 'litro' || u === 'litros') return { value: qty * 1000, base: 'ml' };
+    if (u === 'dl' || u === 'decilitro') return { value: qty * 100, base: 'ml' };
+    if (u === 'cl' || u === 'centilitro') return { value: qty * 10, base: 'ml' };
+    if (u === 'ml' || u === 'mililitro') return { value: qty, base: 'ml' };
+
+    // Default or "Unidades"
+    return { value: qty, base: 'ud' };
+};
+
+/**
+ * Formats a normalized value back to a human-readable string with appropriate units.
+ */
+export const formatNormalized = (qty: number, base: 'g' | 'ml' | 'ud'): string => {
+    if (base === 'g') {
+        if (qty >= 1000) return `${formatQuantity(qty / 1000)} kg`;
+        return `${formatQuantity(qty)} g`;
+    }
+    if (base === 'ml') {
+        if (qty >= 1000) return `${formatQuantity(qty / 1000)} L`;
+        if (qty >= 100) return `${formatQuantity(qty / 100)} dl`;
+        return `${formatQuantity(qty)} ml`;
+    }
+    return `${formatQuantity(qty)} ud`;
+};

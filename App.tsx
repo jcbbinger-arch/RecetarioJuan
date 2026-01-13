@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Recipe, AppSettings, AppBackup, Product, MenuPlan, DEFAULT_CATEGORIES, DEFAULT_PRODUCT_FAMILIES, SubRecipe } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { CookingMode } from './components/CookingMode';
 import { Dashboard } from './components/Dashboard';
 import { RecipeEditor } from './components/RecipeEditor';
 import { RecipeView } from './components/RecipeView';
@@ -63,7 +64,7 @@ const syncRecipesWithProducts = (recipes: Recipe[], products: Product[]): Recipe
   });
 };
 
-type ViewState = 'LANDING' | 'DASHBOARD' | 'EDITOR' | 'VIEWER' | 'MENU_PLANNER' | 'PRODUCT_DB' | 'AI_BRIDGE';
+type ViewState = 'dashboard' | 'editor' | 'planner' | 'products' | 'ai-bridge' | 'view' | 'cooking';
 
 const defaultSettings: AppSettings = {
   teacherName: "Juan Codina Barranco",
@@ -79,7 +80,7 @@ function App() {
   const [productDatabase, setProductDatabase] = useLocalStorage<Product[]>('productDatabase', INITIAL_PRODUCT_DATABASE);
   const [savedMenus, setSavedMenus] = useLocalStorage<MenuPlan[]>('savedMenus', []);
 
-  const [viewState, setViewState] = useState<ViewState>('LANDING');
+  const [viewState, setViewState] = useState<ViewState>('dashboard');
   const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -100,10 +101,10 @@ function App() {
     if (updated) setSettings(newSettings);
   }, [settings.categories, settings.productFamilies, setSettings]);
 
-  const handleEnterApp = () => setViewState('DASHBOARD');
-  const handleLogout = () => { setViewState('LANDING'); setCurrentRecipe(null); };
+  const handleEnterApp = () => setViewState('dashboard');
+  const handleLogout = () => { setViewState('dashboard'); setCurrentRecipe(null); };
 
-  const handleCreateNew = () => { setCurrentRecipe(null); setViewState('EDITOR'); };
+  const handleCreateNew = () => { setCurrentRecipe(null); setViewState('editor'); };
 
   interface LegacySubRecipe extends Omit<SubRecipe, 'photos'> {
     photo?: string;
@@ -159,12 +160,12 @@ function App() {
 
   const handleEdit = (recipe: Recipe) => {
     setCurrentRecipe(migrateRecipeIfNeeded(recipe));
-    setViewState('EDITOR');
+    setViewState('editor');
   };
 
   const handleView = (recipe: Recipe) => {
     setCurrentRecipe(migrateRecipeIfNeeded(recipe));
-    setViewState('VIEWER');
+    setViewState('view');
   };
 
   const handleSave = (recipe: Recipe) => {
@@ -172,7 +173,7 @@ function App() {
       const exists = prev.find(r => r.id === recipe.id);
       return exists ? prev.map(r => r.id === recipe.id ? recipe : r) : [recipe, ...prev];
     });
-    setViewState('DASHBOARD');
+    setViewState('dashboard');
     setCurrentRecipe(null);
   };
 
@@ -194,33 +195,38 @@ function App() {
         }}
       />
 
-      {viewState === 'LANDING' ? (
-        <LandingPage settings={settings} onEnter={handleEnterApp} />
-      ) : viewState === 'VIEWER' && currentRecipe ? (
-        <RecipeView recipe={currentRecipe} onBack={() => setViewState('DASHBOARD')} settings={settings} />
-      ) : viewState === 'EDITOR' ? (
+      {viewState === 'view' && currentRecipe ? (
+        <RecipeView
+          recipe={currentRecipe}
+          onBack={() => setViewState('dashboard')}
+          settings={settings}
+          onStartCooking={() => setViewState('cooking')}
+        />
+      ) : viewState === 'cooking' && currentRecipe ? (
+        <CookingMode recipe={currentRecipe} onBack={() => setViewState('view')} />
+      ) : viewState === 'editor' ? (
         <RecipeEditor
           initialRecipe={currentRecipe}
           productDatabase={productDatabase}
           settings={settings}
           onSave={handleSave}
-          onCancel={() => setViewState('DASHBOARD')}
+          onCancel={() => setViewState('dashboard')}
           onAddProduct={(p) => setProductDatabase(prev => [p, ...prev])}
         />
-      ) : viewState === 'AI_BRIDGE' ? (
+      ) : viewState === 'ai-bridge' ? (
         <AIBridge
           settings={settings}
-          onBack={() => setViewState('DASHBOARD')}
+          onBack={() => setViewState('dashboard')}
           onImport={(recipe) => {
             handleSave(recipe);
-            setViewState('DASHBOARD');
+            setViewState('dashboard');
           }}
         />
-      ) : viewState === 'MENU_PLANNER' ? (
+      ) : viewState === 'planner' ? (
         <MenuPlanner
           recipes={recipes}
           settings={settings}
-          onBack={() => setViewState('DASHBOARD')}
+          onBack={() => setViewState('dashboard')}
           productDatabase={productDatabase}
           savedMenus={savedMenus}
           onSaveMenu={(menu) => {
@@ -236,10 +242,10 @@ function App() {
           }}
           onDeleteMenu={(id) => setSavedMenus(prev => prev.filter(m => m.id !== id))}
         />
-      ) : viewState === 'PRODUCT_DB' ? (
+      ) : viewState === 'products' ? (
         <ProductDatabaseViewer
           products={productDatabase}
-          onBack={() => setViewState('DASHBOARD')}
+          onBack={() => setViewState('dashboard')}
           onAdd={(p) => setProductDatabase([p, ...productDatabase])}
           onEdit={(p) => {
             const updatedProducts = productDatabase.map(old => old.id === p.id ? p : old);
@@ -266,9 +272,9 @@ function App() {
           onDelete={(id) => setRecipes(recipes.filter(r => r.id !== id))}
           onImport={(r) => setRecipes([r, ...recipes])}
           onOpenSettings={() => setIsSettingsOpen(true)}
-          onOpenMenuPlanner={() => setViewState('MENU_PLANNER')}
-          onOpenProductDB={() => setViewState('PRODUCT_DB')}
-          onOpenAIBridge={() => setViewState('AI_BRIDGE')}
+          onOpenMenuPlanner={() => setViewState('planner')}
+          onOpenProductDB={() => setViewState('products')}
+          onOpenAIBridge={() => setViewState('ai-bridge')}
           onLogout={handleLogout}
         />
       )}

@@ -78,6 +78,7 @@ export interface Recipe {
   serviceDetails: ServiceDetails;
   lastModified: number;
   totalCost?: number;
+  manualAllergens?: Allergen[];
 }
 
 export interface MenuPlan {
