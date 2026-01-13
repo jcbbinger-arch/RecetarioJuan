@@ -43,7 +43,7 @@ export const Auth: React.FC<AuthProps> = ({ onSession }) => {
 
                     <div className="space-y-2">
                         <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic">
-                            Antigravity<span className="text-amber-500 not-italic">.</span>
+                            GastroProfesor<span className="text-amber-500 not-italic">.</span>
                         </h1>
                         <p className="text-slate-400 text-xs font-black uppercase tracking-[0.4em]">Gastronomía Inteligente</p>
                     </div>

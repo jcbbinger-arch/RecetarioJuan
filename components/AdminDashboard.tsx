@@ -85,7 +85,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, onViewRe
                         <button onClick={onBack} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><ArrowLeft size={20} /></button>
                         <div>
                             <h1 className="text-4xl font-black uppercase tracking-tighter">Panel Maestro</h1>
-                            <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] mt-1">Administración y Control Antigravity</p>
+                            <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] mt-1">Administración y Control GastroProfesor</p>
                         </div>
                     </div>
                     <div className="flex bg-white/10 p-1.5 rounded-2xl backdrop-blur-md">

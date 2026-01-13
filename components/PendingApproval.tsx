@@ -50,7 +50,7 @@ export const PendingApproval: React.FC<PendingApprovalProps> = ({ email, onLogou
 
                 <div className="flex items-center justify-center gap-3 opacity-30">
                     <ChefHat size={16} className="text-white" />
-                    <span className="text-white text-[10px] font-black uppercase tracking-[0.4em]">Antigravity</span>
+                    <span className="text-white text-[10px] font-black uppercase tracking-[0.4em]">GastroProfesor</span>
                 </div>
             </div>
         </div>
