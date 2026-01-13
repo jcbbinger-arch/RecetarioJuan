@@ -79,6 +79,16 @@ export interface Recipe {
   lastModified: number;
   totalCost?: number;
   manualAllergens?: Allergen[];
+  isPublic?: boolean;
+  ownerId?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  is_approved: boolean;
+  role: 'admin' | 'user';
+  created_at: string;
 }
 
 export interface MenuPlan {
