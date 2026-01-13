@@ -1,10 +1,10 @@
-
 import React, { useState } from 'react';
 import { Recipe, AppSettings, Product, MenuPlan } from '../types';
 import {
   ArrowLeft, Plus, Trash2, Calendar, Users, Save,
-  ChefHat, Search, BookOpen, Clock, FileText, Download, Check
+  ChefHat, Search, BookOpen, Clock, FileText, Download, Check, ShoppingCart, X, Printer
 } from 'lucide-react';
+import { parseQuantity, normalizeToBasics, formatNormalized } from '../utils';
 
 interface MenuPlannerProps {
   recipes: Recipe[];
@@ -27,6 +27,7 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [pax, setPax] = useState(1);
   const [selectedRecipeIds, setSelectedRecipeIds] = useState<string[]>([]);
+  const [showShoppingList, setShowShoppingList] = useState(false);
 
   const filteredRecipes = recipes.filter(r =>
     r.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -73,6 +74,33 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
     setSelectedRecipeIds(prev =>
       prev.includes(id) ? prev.filter(rid => rid !== id) : [...prev, id]
     );
+  };
+
+  const calculateShoppingList = () => {
+    const list: Record<string, { total: number, base: 'g' | 'ml' | 'ud' }> = {};
+
+    selectedRecipeIds.forEach(id => {
+      const recipe = recipes.find(r => r.id === id);
+      if (!recipe) return;
+
+      const ratio = pax / recipe.yieldQuantity;
+
+      recipe.subRecipes?.forEach(sub => {
+        sub.ingredients?.forEach(ing => {
+          const qty = parseQuantity(ing.quantity) * ratio;
+          const normalized = normalizeToBasics(qty, ing.unit);
+          const key = ing.name.toUpperCase();
+
+          if (!list[key]) {
+            list[key] = { total: normalized.value, base: normalized.base };
+          } else {
+            list[key].total += normalized.value;
+          }
+        });
+      });
+    });
+
+    return Object.entries(list).sort((a, b) => a[0].localeCompare(b[0]));
   };
 
   return (
@@ -198,8 +226,8 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
                       key={recipe.id}
                       onClick={() => toggleRecipe(recipe.id)}
                       className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left group ${selectedRecipeIds.includes(recipe.id)
-                          ? 'border-indigo-500 bg-indigo-50/50 shadow-md'
-                          : 'border-slate-100 hover:border-slate-300 bg-white'
+                        ? 'border-indigo-500 bg-indigo-50/50 shadow-md'
+                        : 'border-slate-100 hover:border-slate-300 bg-white'
                         }`}
                     >
                       <div className="w-16 h-16 rounded-xl bg-slate-100 overflow-hidden shrink-0">
@@ -220,6 +248,21 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
           </div>
         ) : (
           <div className="space-y-8">
+            <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+              <div className="flex gap-4">
+                <div className="text-center p-4 bg-indigo-50 rounded-2xl">
+                  <p className="text-[10px] font-black uppercase text-indigo-400">Total Menús</p>
+                  <p className="text-2xl font-black text-indigo-900">{savedMenus.length}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleStartNew}
+                className="px-8 py-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-500 flex items-center gap-3 shadow-xl shadow-indigo-500/20 font-black uppercase text-[11px] tracking-widest transition-all active:scale-95"
+              >
+                <Plus size={20} /> Crear Nuevo Servicio
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {savedMenus.map(menu => (
                 <div key={menu.id} className="bg-white rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-500 border border-slate-100 p-6 space-y-6 group">
@@ -240,7 +283,14 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
                     </div>
                   </div>
                   <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
-                    <span className="text-[9px] font-black text-slate-300 uppercase">{menu.recipeIds.length} RECETAS</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { handleEdit(menu); setShowShoppingList(true); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[9px] font-black uppercase tracking-tight hover:bg-emerald-100 transition-colors"
+                      >
+                        <ShoppingCart size={12} /> Compras
+                      </button>
+                    </div>
                     <button onClick={() => handleEdit(menu)} className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors">Ver Detalles →</button>
                   </div>
                 </div>
@@ -269,6 +319,64 @@ export const MenuPlanner: React.FC<MenuPlannerProps> = ({
           </div>
         )}
       </div>
+
+      {showShoppingList && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 md:p-8">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowShoppingList(false)}></div>
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-emerald-50/50">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-emerald-500 text-white rounded-2xl shadow-lg shadow-emerald-500/20">
+                  <ShoppingCart size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Lista de Compra</h3>
+                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">{title || 'Menú Seleccionado'}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowShoppingList(false)} className="p-2 hover:bg-white rounded-xl transition-colors"><X size={24} className="text-slate-400" /></button>
+            </div>
+
+            <div className="p-8 overflow-y-auto flex-grow print:p-0">
+              <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 mb-6 flex justify-between items-center group">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Información del Pedido</p>
+                  <p className="text-lg font-bold text-slate-800">{pax} PAX <span className="text-slate-300 mx-2">|</span> {new Date(date).toLocaleDateString()}</p>
+                </div>
+                <button onClick={() => window.print()} className="p-4 bg-white text-slate-600 rounded-2xl shadow-sm border border-slate-100 hover:text-slate-900 transition-all active:scale-95 group-hover:shadow-md">
+                  <Printer size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {calculateShoppingList().map(([name, data]) => (
+                  <div key={name} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-emerald-200 transition-all hover:translate-x-1 group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 opacity-20 group-hover:opacity-100 transition-opacity"></div>
+                      <span className="text-[11px] font-black text-slate-700 uppercase">{name}</span>
+                    </div>
+                    <span className="text-sm font-black text-slate-900 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">{formatNormalized(data.total, data.base)}</span>
+                  </div>
+                ))}
+                {calculateShoppingList().length === 0 && (
+                  <div className="text-center py-10">
+                    <p className="text-slate-400 font-bold uppercase text-[10px]">No hay ingredientes para calcular</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-8 border-t border-slate-100 flex justify-end gap-3 no-print">
+              <button
+                onClick={() => setShowShoppingList(false)}
+                className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-slate-800 shadow-xl transition-all active:scale-95"
+              >
+                Cerrar Lista
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

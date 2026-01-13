@@ -12,7 +12,7 @@ import {
 import {
   Save, X, Plus, Trash2, Image as ImageIcon,
   Book, Utensils, Thermometer, Info, Database, MessageSquare, ChevronDown, CheckCircle2,
-  ChefHat, Users, Camera, DatabaseZap, Check, HelpCircle
+  ChefHat, Users, Camera, DatabaseZap, Check, HelpCircle, AlertCircle
 } from 'lucide-react';
 
 interface RecipeEditorProps {
@@ -48,6 +48,7 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
   const [platingInstructions, setPlatingInstructions] = useState('');
   const [serviceDetails, setServiceDetails] = useState<ServiceDetails>(emptyServiceDetails);
   const [subRecipes, setSubRecipes] = useState<SubRecipe[]>([]);
+  const [manualAllergens, setManualAllergens] = useState<Allergen[]>([]);
   const [activeTab, setActiveTab] = useState<number>(0);
   const [suggestions, setSuggestions] = useState<{ idx: number, list: Product[] } | null>(null);
 
@@ -78,6 +79,7 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
       setSourceUrl(initialRecipe.sourceUrl || '');
       setServiceDetails(initialRecipe.serviceDetails || emptyServiceDetails);
       setPlatingInstructions(initialRecipe.platingInstructions || '');
+      setManualAllergens(initialRecipe.manualAllergens || []);
       setSubRecipes((initialRecipe.subRecipes || []).map(sr => ({
         ...sr,
         photos: sr.photos || ((sr as any).photo ? [(sr as any).photo] : [])
@@ -302,6 +304,7 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
       name, category, photo, creator, sourceUrl,
       yieldQuantity, yieldUnit, totalCost,
       subRecipes, platingInstructions, serviceDetails,
+      manualAllergens,
       lastModified: Date.now()
     });
   };
@@ -323,72 +326,96 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
       </div>
 
       <div className="max-w-7xl mx-auto p-8 space-y-8">
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 p-8 grid grid-cols-1 md:grid-cols-12 gap-10">
-          <div className="md:col-span-3">
-            <div className="relative aspect-square bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden cursor-pointer shadow-inner group transition-all">
-              {photo ? <img src={photo} className="w-full h-full object-cover" alt="" /> : <div className="text-center"><ImageIcon size={48} className="text-slate-200 mx-auto" /><p className="text-[10px] font-black uppercase text-slate-300 mt-2">Portada Plato</p></div>}
-              <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <Camera className="text-white" size={32} />
+        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 p-8 space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
+            <div className="md:col-span-3">
+              <div className="relative aspect-square bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden cursor-pointer shadow-inner group transition-all">
+                {photo ? <img src={photo} className="w-full h-full object-cover" alt="" /> : <div className="text-center"><ImageIcon size={48} className="text-slate-200 mx-auto" /><p className="text-[10px] font-black uppercase text-slate-300 mt-2">Portada Plato</p></div>}
+                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Camera className="text-white" size={32} />
+                </div>
+                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setPhoto(reader.result as string);
+                    reader.readAsDataURL(file);
+                  }
+                }} />
               </div>
-              <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => setPhoto(reader.result as string);
-                  reader.readAsDataURL(file);
-                }
-              }} />
             </div>
-          </div>
-          <div className="md:col-span-9 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-2">
+            <div className="md:col-span-9 space-y-6">
+              <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Nombre del Plato</label>
                 <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-xl font-serif font-black uppercase focus:ring-2 focus:ring-slate-200 transition-all" placeholder="Nombre de la receta" />
               </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Categorías</label>
-                <div className="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 max-h-32 overflow-y-auto custom-scrollbar">
-                  {settings.categories?.map(c => {
-                    const isSelected = category.includes(c);
-                    return (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => {
-                          if (isSelected) {
-                            setCategory(category.filter(cat => cat !== c));
-                          } else {
-                            setCategory([...category, c]);
-                          }
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all border ${isSelected
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                          : 'bg-white text-slate-400 border-slate-200 hover:border-slate-400'
-                          }`}
-                      >
-                        {c}
-                      </button>
-                    );
-                  })}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 shadow-inner">
+                  <label className="block text-[10px] font-black text-amber-700 uppercase mb-2 flex items-center gap-2">
+                    <Users size={12} /> Rendimiento (PAX)
+                  </label>
+                  <input type="number" value={yieldQuantity} onChange={e => setYieldQuantity(Number(e.target.value))} className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl font-black text-amber-900 outline-none focus:ring-2 focus:ring-amber-500 transition-all" />
+                </div>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2">Unidad de Medida</label>
+                  <input type="text" value={yieldUnit} onChange={e => setYieldUnit(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-black text-slate-800 outline-none focus:ring-2 focus:ring-slate-900 transition-all" placeholder="Ej: raciones, pax, ud..." />
+                </div>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2">Responsable / Creador</label>
+                  <input type="text" value={creator} onChange={e => setCreator(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-black text-slate-800 outline-none focus:ring-2 focus:ring-slate-900 transition-all" />
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 shadow-inner">
-                <label className="block text-[10px] font-black text-amber-700 uppercase mb-2 flex items-center gap-2">
-                  <Users size={12} /> Rendimiento (PAX)
-                </label>
-                <input type="number" value={yieldQuantity} onChange={e => setYieldQuantity(Number(e.target.value))} className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl font-black text-amber-900 outline-none focus:ring-2 focus:ring-amber-500 transition-all" />
-              </div>
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner">
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2">Unidad de Medida</label>
-                <input type="text" value={yieldUnit} onChange={e => setYieldUnit(e.target.value)} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-black text-slate-800 outline-none focus:ring-2 focus:ring-slate-900 transition-all" placeholder="Ej: raciones, pax, ud..." />
-              </div>
-              <div className="p-4">
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2">Responsable / Creador</label>
-                <input type="text" value={creator} onChange={e => setCreator(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-black" />
-              </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-8">
+            <label className="block text-[10px] font-black text-slate-500 uppercase mb-4 tracking-widest">Categorías del Plato</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {settings.categories?.map(c => {
+                const isSelected = category.includes(c);
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) setCategory(category.filter(cat => cat !== c));
+                      else setCategory([...category, c]);
+                    }}
+                    className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase transition-all border-2 text-center flex items-center justify-center leading-tight h-12 ${isSelected
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-xl scale-105'
+                      : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300 hover:text-slate-600'
+                      }`}
+                  >
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-8">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertCircle size={14} className="text-rose-500" />
+              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Alérgenos por Contaminación Cruzada (Trazas)</label>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 lg:grid-cols-14 gap-2">
+              {ALLERGEN_LIST.map(a => {
+                const isSel = manualAllergens.includes(a);
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => {
+                      const updated = isSel ? manualAllergens.filter(x => x !== a) : [...manualAllergens, a];
+                      setManualAllergens(updated);
+                    }}
+                    className={`py-3 px-1 rounded-xl text-[8px] font-black border-2 transition-all uppercase flex flex-col items-center justify-center text-center leading-none gap-1 h-20 ${isSel ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-md scale-105' : 'bg-slate-50 border-transparent text-slate-300 hover:border-slate-200 hover:text-slate-400'}`}
+                  >
+                    <span className="text-lg">{ALLERGEN_ICONS[a] || '⚠️'}</span>
+                    <span className="mt-1">{a.split(' ')[0]}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
