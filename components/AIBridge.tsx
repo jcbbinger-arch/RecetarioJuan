@@ -92,7 +92,7 @@ RECETA A DIGITALIZAR:
 
       // 4. Parseo final
       const data = JSON.parse(jsonString);
-      
+
       if (!data.name || (!data.elaborations && !data.subRecipes)) {
         throw new Error("El JSON no tiene la estructura de receta esperada.");
       }
@@ -106,14 +106,17 @@ RECETA A DIGITALIZAR:
         name: (elab.name || 'Elaboración').toUpperCase(),
         instructions: elab.instructions || '',
         photos: [],
-        ingredients: (elab.ingredients || []).map((ing: any, iIdx: number) => ({
-          id: `ing_${Date.now()}_${idx}_${iIdx}`,
-          name: (ing.name || '').toUpperCase(),
-          quantity: String(ing.quantity || '0'),
-          unit: ing.unit || 'kg',
-          allergens: [], 
-          cost: 0
-        }))
+        ingredients: (elab.ingredients || []).map((ing: any, iIdx: number) => {
+          const qtyStr = String(ing.quantity || '0');
+          return {
+            id: `ing_${Date.now()}_${idx}_${iIdx}`,
+            name: (ing.name || '').toUpperCase(),
+            quantity: qtyStr,
+            unit: ing.unit || 'kg',
+            allergens: [],
+            cost: 0
+          };
+        })
       }));
 
       const newRecipe: Recipe = {
@@ -138,7 +141,7 @@ RECETA A DIGITALIZAR:
       };
 
       onImport(newRecipe);
-      setJsonInput(''); 
+      setJsonInput('');
       alert(`¡Digitalización Exitosa! "${newRecipe.name}" añadida a tu catálogo.`);
     } catch (err) {
       console.error("Parse error:", err);
@@ -151,76 +154,76 @@ RECETA A DIGITALIZAR:
       <div className="max-w-6xl mx-auto w-full">
         {/* Cabecera */}
         <div className="flex items-center gap-4 mb-10">
-           <button onClick={onBack} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-600">
-             <ArrowLeft size={24} />
-           </button>
-           <div className="flex items-center gap-3">
-              <div className="bg-emerald-500 p-2.5 rounded-xl text-white shadow-lg">
-                 <Sparkles size={24} />
-              </div>
-              <div>
-                 <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">Puente de Digitalización IA</h1>
-                 <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Digitalización inteligente libre de errores de citación.</p>
-              </div>
-           </div>
+          <button onClick={onBack} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-600">
+            <ArrowLeft size={24} />
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-500 p-2.5 rounded-xl text-white shadow-lg">
+              <Sparkles size={24} />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">Puente de Digitalización IA</h1>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Digitalización inteligente libre de errores de citación.</p>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
-          
+
           {/* PASO 1: Prompt Maestro */}
           <div className="bg-slate-900 rounded-[2.5rem] p-10 flex flex-col justify-between shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -mr-20 -mt-20 group-hover:bg-amber-500/10 transition-all"></div>
-            
+
             <div>
               <span className="bg-emerald-500 text-slate-900 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest mb-8 inline-block">Paso 1</span>
-              <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none mb-6">Copia el<br/><span className="text-emerald-400">Prompt Maestro</span></h2>
+              <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none mb-6">Copia el<br /><span className="text-emerald-400">Prompt Maestro</span></h2>
               <p className="text-slate-400 text-sm leading-relaxed mb-8 font-medium">
                 Hemos optimizado el prompt para que la IA estructure los datos exactamente como tu sistema los necesita.
               </p>
             </div>
 
-            <button 
+            <button
               onClick={handleCopyPrompt}
               className={`w-full py-5 rounded-2xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 transition-all shadow-xl ${copySuccess ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900 hover:bg-emerald-50'}`}
             >
-              {copySuccess ? <><Check size={20}/> ¡Prompt Copiado!</> : <><Copy size={20}/> Copiar Prompt Maestro</>}
+              {copySuccess ? <><Check size={20} /> ¡Prompt Copiado!</> : <><Copy size={20} /> Copiar Prompt Maestro</>}
             </button>
           </div>
 
           {/* PASO 2: Importación */}
           <div className="bg-white rounded-[2.5rem] p-10 flex flex-col shadow-xl border border-slate-100">
             <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest mb-8 inline-block self-start">Paso 2</span>
-            <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-6">Importa el<br/><span className="text-emerald-600">Resultado</span></h2>
+            <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-6">Importa el<br /><span className="text-emerald-600">Resultado</span></h2>
             <p className="text-slate-500 text-sm leading-relaxed mb-8 font-medium">
               Pega el código JSON de la IA. El sistema limpiará automáticamente etiquetas inválidas como [cite] o [cite_start].
             </p>
 
             <div className="flex-grow flex flex-col gap-4">
               <div className="relative flex-grow">
-                 <textarea 
+                <textarea
                   value={jsonInput}
                   onChange={e => setJsonInput(e.target.value)}
                   className="w-full h-full min-h-[300px] p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-mono text-xs focus:ring-2 focus:ring-emerald-500 outline-none resize-none transition-all placeholder:text-slate-300"
                   placeholder="Pega el código JSON aquí..."
-                 />
+                />
               </div>
 
               {error && (
                 <div className="flex items-start gap-3 text-rose-600 bg-rose-50 p-4 rounded-2xl border border-rose-100 animate-fadeIn">
-                   <AlertCircle size={20} className="shrink-0 mt-0.5" />
-                   <div className="space-y-1">
-                      <p className="text-[10px] font-black uppercase tracking-tight">Error de Sintaxis Detectado</p>
-                      <p className="text-[9px] font-bold opacity-80 leading-tight">{error}</p>
-                   </div>
+                  <AlertCircle size={20} className="shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-tight">Error de Sintaxis Detectado</p>
+                    <p className="text-[9px] font-bold opacity-80 leading-tight">{error}</p>
+                  </div>
                 </div>
               )}
 
-              <button 
+              <button
                 onClick={handleProcessJSON}
                 disabled={!jsonInput.trim()}
                 className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3 shadow-xl hover:bg-slate-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                <FileJson size={20}/> Limpiar e Importar Receta
+                <FileJson size={20} /> Limpiar e Importar Receta
               </button>
             </div>
           </div>

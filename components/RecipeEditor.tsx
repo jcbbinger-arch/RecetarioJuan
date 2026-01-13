@@ -7,6 +7,9 @@ import {
   CUTLERY_DICTIONARY, TEMPERATURE_DICTIONARY, ALLERGEN_ICONS
 } from '../types';
 import {
+  parseQuantity, formatQuantity, convertUnit, calculateIngredientCost
+} from '../utils';
+import {
   Save, X, Plus, Trash2, Image as ImageIcon,
   Book, Utensils, Thermometer, Info, Database, MessageSquare, ChevronDown, CheckCircle2,
   ChefHat, Users, Camera, DatabaseZap, Check, HelpCircle
@@ -85,70 +88,94 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
     }
   }, [initialRecipe, settings.teacherName]);
 
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const imageItem = Array.from(items).find(item => item.type.indexOf('image') !== -1);
+      if (imageItem) {
+        const file = imageItem.getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            // Target heuristic: if main photo is empty, put it there. Otherwise, add to active sub-recipe.
+            if (!photo && activeTab === 0) {
+              setPhoto(base64);
+            } else if (subRecipes[activeTab]) {
+              const newSubs = [...subRecipes];
+              newSubs[activeTab].photos = [...(newSubs[activeTab].photos || []), base64];
+              setSubRecipes(newSubs);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [activeTab, photo, subRecipes]);
+
   const updateIngredient = (subIdx: number, ingIdx: number, field: keyof Ingredient, value: string | number | Allergen[]) => {
     const newSubs = [...subRecipes];
     const ing = newSubs[subIdx].ingredients[ingIdx];
 
     if (field === 'quantity') {
-      const parsedVal = value.toString().replace(',', '.');
-      ing.quantity = parsedVal;
-      if (ing.pricePerUnit !== undefined) {
-        const qtyNum = parseFloat(parsedVal);
-        ing.cost = !isNaN(qtyNum) ? qtyNum * ing.pricePerUnit : 0;
-      }
+      const qtyStr = value.toString();
+      ing.quantity = qtyStr;
+      const qtyNum = parseQuantity(qtyStr);
+      ing.cost = calculateIngredientCost(qtyNum, ing.pricePerUnit || 0);
     } else if (field === 'unit') {
       const newUnit = value as string;
       const oldUnit = ing.unit;
-      const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+      const oldQtyNum = parseQuantity(ing.quantity);
 
-      if (!isNaN(qtyNum) && oldUnit !== newUnit) {
-        // User requirement: Do NOT modify quantity.
-        // Adjust pricePerUnit relative to the NEW unit.
+      if (oldQtyNum > 0 && oldUnit !== newUnit) {
+        // Implement scaling: 1kg -> 1000g
+        const newQtyNum = convertUnit(oldQtyNum, oldUnit, newUnit);
+        ing.quantity = formatQuantity(newQtyNum);
+
+        // Adjust pricePerUnit relative to the NEW unit to keep total cost consistent 
+        // IF we have a product match
         const product = productDatabase.find(p => p.name.toUpperCase() === ing.name.toUpperCase());
         if (product) {
-          const factor = convertQuantity(1, newUnit, product.unit);
+          const factor = convertUnit(1, newUnit, product.unit);
           ing.pricePerUnit = product.pricePerUnit * factor;
         }
 
-        const currentPrice = ing.pricePerUnit || 0;
-        ing.cost = qtyNum * currentPrice;
+        ing.cost = calculateIngredientCost(newQtyNum, ing.pricePerUnit || 0);
       }
       ing.unit = newUnit;
     } else if (field === 'allergens') {
       ing.allergens = value as Allergen[];
-    } else if (field === 'pricePerUnit' || field === 'cost') {
-      (ing as any)[field] = Number(value);
-      if (field === 'pricePerUnit') {
-        const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
-        ing.cost = !isNaN(qtyNum) ? qtyNum * Number(value) : 0;
-      }
-    } else {
+    } else if (field === 'pricePerUnit') {
+      const price = Number(value);
+      ing.pricePerUnit = price;
+      ing.cost = calculateIngredientCost(ing.quantity, price);
+    } else if (field === 'cost') {
+      ing.cost = Number(value);
+    } else if (field === 'name') {
       (ing as any)[field] = value;
-    }
-
-    if (field === 'name') {
       const lowerVal = (value as string).toLowerCase();
       if (lowerVal.length > 1) {
         const matches = productDatabase.filter(p => p.name.toLowerCase().includes(lowerVal)).slice(0, 5);
         setSuggestions({ idx: ingIdx, list: matches });
 
-        // If it's an exact match (case insensitive), we could sync it immediately or wait for selection
-        // Let's at least ensure price/unit/allergens are synced if someone types it exactly
         const exactMatch = productDatabase.find(p => p.name.toUpperCase() === (value as string).toUpperCase());
         if (exactMatch) {
-          // Keep existing unit if it's set and valid, otherwise take from product
           const currentUnit = ing.unit || exactMatch.unit;
           ing.unit = currentUnit;
           ing.allergens = exactMatch.allergens;
           ing.category = exactMatch.category;
 
-          const factor = convertQuantity(1, currentUnit, exactMatch.unit);
+          const factor = convertUnit(1, currentUnit, exactMatch.unit);
           ing.pricePerUnit = exactMatch.pricePerUnit * factor;
-
-          const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
-          ing.cost = !isNaN(qtyNum) ? qtyNum * ing.pricePerUnit : 0;
+          ing.cost = calculateIngredientCost(ing.quantity, ing.pricePerUnit);
         }
       } else setSuggestions(null);
+    } else {
+      (ing as any)[field] = value;
     }
     setSubRecipes(newSubs);
   };
@@ -185,36 +212,6 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
     }
   };
 
-  const convertQuantity = (qty: number, fromUnit: string, toUnit: string): number => {
-    const f = fromUnit.toLowerCase();
-    const t = toUnit.toLowerCase();
-    if (f === t) return qty;
-
-    // Mass
-    if (f === 'g' && t === 'kg') return qty / 1000;
-    if (f === 'kg' && t === 'g') return qty * 1000;
-
-    // Volume
-    // Normalize to ml first
-    const getMl = (v: number, u: string) => {
-      if (u === 'l' || u === 'litro') return v * 1000;
-      if (u === 'dl') return v * 100;
-      if (u === 'cl') return v * 10;
-      return v; // assume ml
-    };
-
-    // Check if both are volume
-    const volumeUnits = ['l', 'litro', 'dl', 'cl', 'ml'];
-    if (volumeUnits.includes(f) && volumeUnits.includes(t)) {
-      const ml = getMl(qty, f);
-      if (t === 'l' || t === 'litro') return ml / 1000;
-      if (t === 'dl') return ml / 100;
-      if (t === 'cl') return ml / 10;
-      return ml;
-    }
-
-    return qty;
-  };
 
   const handleSaveQuickProduct = (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,22 +226,19 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
     newSubs.forEach(sub => {
       sub.ingredients.forEach(ing => {
         if (ing.name.toUpperCase() === quickAddProduct.name.toUpperCase()) {
-          const currentQty = parseFloat(ing.quantity.replace(',', '.'));
+          const currentQty = parseQuantity(ing.quantity);
 
           // Sync unit and price
+          const oldUnit = ing.unit;
           ing.unit = quickAddProduct.unit;
           ing.pricePerUnit = quickAddProduct.pricePerUnit;
           ing.allergens = quickAddProduct.allergens;
           ing.category = quickAddProduct.category;
 
-          if (!isNaN(currentQty)) {
-            // Recalculate cost with the NEW price and OLD quantity
-            // NOTE: We don't convert quantity here because the user just defined 
-            // the product's master unit. The existing quantity in the recipe 
-            // should be interpreted in that new unit, or converted if we knew the old one.
-            // Since it's a "Quick Add", the old unit was likely default 'kg'.
-            ing.cost = currentQty * quickAddProduct.pricePerUnit;
-          }
+          // Scaling logic for quick add too
+          const scaledQty = convertUnit(currentQty, oldUnit, ing.unit);
+          ing.quantity = formatQuantity(scaledQty);
+          ing.cost = calculateIngredientCost(scaledQty, quickAddProduct.pricePerUnit);
         }
       });
     });
@@ -256,11 +250,11 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
   const selectProduct = (subIdx: number, ingIdx: number, product: Product) => {
     const newSubs = [...subRecipes];
     const ing = newSubs[subIdx].ingredients[ingIdx];
-    const qtyNum = parseFloat(ing.quantity.replace(',', '.'));
+    const qtyNum = parseQuantity(ing.quantity);
 
     // Keep existing unit if set, otherwise take from product
     const currentUnit = ing.unit || product.unit;
-    const factor = convertQuantity(1, currentUnit, product.unit);
+    const factor = convertUnit(1, currentUnit, product.unit);
     const priceInRecipeUnit = product.pricePerUnit * factor;
 
     newSubs[subIdx].ingredients[ingIdx] = {
@@ -270,7 +264,7 @@ export const RecipeEditor: React.FC<RecipeEditorProps> = ({
       allergens: product.allergens,
       unit: currentUnit,
       pricePerUnit: priceInRecipeUnit,
-      cost: !isNaN(qtyNum) ? qtyNum * priceInRecipeUnit : 0
+      cost: calculateIngredientCost(qtyNum, priceInRecipeUnit)
     };
     setSubRecipes(newSubs);
     setSuggestions(null);

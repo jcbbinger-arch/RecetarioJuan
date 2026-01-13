@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Recipe, AppSettings, Allergen, ALLERGEN_LIST, ALLERGEN_ICONS, SERVICE_TYPES } from '../types';
+import { parseQuantity, formatQuantity } from '../utils';
 import { Printer, ArrowLeft, AlertOctagon, Utensils, Thermometer, ChefHat, Users, Clock, UtensilsCrossed, MessageSquare, Info, Camera } from 'lucide-react';
 
 interface RecipeViewProps {
@@ -27,10 +28,10 @@ export const RecipeView: React.FC<RecipeViewProps> = ({ recipe, settings, onBack
   }, [recipe]);
 
   const scaleQuantity = (qtyStr: string): string => {
-    const num = parseFloat(qtyStr.replace(',', '.'));
-    if (isNaN(num)) return qtyStr;
+    const num = parseQuantity(qtyStr);
+    if (num <= 0) return qtyStr;
     const scaled = num * paxRatio;
-    return scaled % 1 === 0 ? scaled.toString() : scaled.toFixed(scaled < 1 ? 3 : 2).replace('.', ',');
+    return formatQuantity(scaled);
   };
 
   return (
@@ -248,7 +249,7 @@ export const RecipeView: React.FC<RecipeViewProps> = ({ recipe, settings, onBack
             <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-2">
               <Users size={12} /> Rendimiento
             </p>
-            <span className="text-xl font-black text-amber-500 leading-none">{dynamicPax} <span className="text-xs opacity-70">{recipe.yieldUnit.substring(0, 3)}</span></span>
+            <span className="text-xl font-black text-amber-500 leading-none">{dynamicPax} <span className="text-xs opacity-70">{(recipe.yieldUnit || '').substring(0, 3)}</span></span>
           </div>
         </div>
 

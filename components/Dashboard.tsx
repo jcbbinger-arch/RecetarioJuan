@@ -184,7 +184,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <div>
                     <h3 className="text-[11px] font-black text-slate-800 leading-tight uppercase tracking-tight line-clamp-2 group-hover:text-indigo-600 transition-colors">{recipe.name}</h3>
                     <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1.5 flex items-center gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
-                      <Users size={8} /> {recipe.yieldQuantity} {recipe.yieldUnit.substring(0, 4)}
+                      <Users size={8} /> {recipe.yieldQuantity} {(recipe.yieldUnit || '').substring(0, 4)}
                     </p>
                   </div>
 
